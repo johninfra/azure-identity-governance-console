@@ -154,3 +154,225 @@ el("requestForm").addEventListener("submit",e=>{e.preventDefault();const f=new F
 el("menuButton").addEventListener("click",()=>el("sidebar").classList.toggle("open"));
 updatePending();render();
 window.setView=setView;window.decide=decide;window.remediate=remediate;window.openRequest=openRequest;window.exportData=exportData;window.importData=importData;window.resetData=resetData;
+
+
+/* ---------- Identity lifecycle management ---------- */
+const IDENTITY_ROLE_CATALOG=[
+  "Reader","Contributor","Security Reader","Security Administrator",
+  "User Administrator","Virtual Machine Contributor","Key Vault Secrets User"
+];
+
+function ensureIdentitySchema(){
+  const defaults={
+    U001:["G001","G005"],
+    U002:["G004","G005"],
+    U003:["G003","G005"],
+    U004:["G002","G005"],
+    U005:["G005"],
+    U006:["G004","G005"],
+    U007:[],
+    U008:["G001"]
+  };
+  state.users.forEach(u=>{
+    if(!Array.isArray(u.roles))u.roles=[];
+    if(!Array.isArray(u.groups))u.groups=defaults[u.id]?[...defaults[u.id]]:[];
+    if(!u.manager)u.manager="";
+    if(!u.dept)u.dept="Unassigned";
+    if(!u.type)u.type="Member";
+    if(typeof u.mfa!=="boolean")u.mfa=false;
+    if(!u.risk)u.risk="Low";
+    if(!u.status)u.status="Active";
+  });
+  save();
+}
+ensureIdentitySchema();
+
+function esc(v){
+  return String(v??"")
+    .replaceAll("&","&amp;").replaceAll("<","&lt;")
+    .replaceAll(">","&gt;").replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
+}
+
+function identityGroupNames(u){
+  return (u.groups||[]).map(id=>state.groups.find(g=>g.id===id)?.name).filter(Boolean);
+}
+
+function identities(){
+  const rows=filtered(state.users).map(u=>{
+    const roleText=(u.roles||[]).length?u.roles.join(", "):"None";
+    const groupText=identityGroupNames(u).length?identityGroupNames(u).join(", "):"None";
+    return `<tr>
+      <td class="name-cell"><strong>${esc(u.name)}</strong><span>${esc(u.upn)}</span></td>
+      <td>${esc(u.dept)}</td>
+      <td>${esc(u.manager||"—")}</td>
+      <td>${esc(u.type)}</td>
+      <td>${u.mfa?badge("Registered","good"):badge("Missing","bad")}</td>
+      <td>${riskBadge(u.risk)}</td>
+      <td class="wrap-cell">${esc(roleText)}</td>
+      <td class="wrap-cell">${esc(groupText)}</td>
+      <td>${statusBadge(u.status)}</td>
+      <td class="actions-cell">
+        <button class="button secondary" onclick="openIdentityEditor('${u.id}')">Edit</button>
+        <button class="button ghost" onclick="toggleIdentity('${u.id}')">${u.status==="Active"?"Disable":"Enable"}</button>
+        <button class="button danger" onclick="deleteIdentity('${u.id}')">Delete</button>
+      </td>
+    </tr>`;
+  }).join("");
+
+  return `<div class="card card-pad">
+    <div class="toolbar">
+      <div>
+        <p class="eyebrow">Identity lifecycle</p>
+        <h2 style="margin:4px 0">Identity directory</h2>
+        <div class="muted" style="font-size:12px">Create, edit, enable/disable, delete, and manage identity attributes, roles, and group memberships.</div>
+      </div>
+      <button class="button primary" onclick="openIdentityEditor()">+ Create identity</button>
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Identity</th><th>Department</th><th>Manager</th><th>Type</th><th>MFA</th><th>Risk</th><th>Roles</th><th>Groups</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody>${rows||'<tr><td colspan="10" class="empty">No matching identities</td></tr>'}</tbody>
+    </table></div>
+  </div>`;
+}
+
+function populateIdentityChoices(editingId=null){
+  const departments=[...new Set(state.users.map(u=>u.dept).filter(Boolean))].sort();
+  el("departmentOptions").innerHTML=departments.map(d=>`<option value="${esc(d)}"></option>`).join("");
+  el("managerOptions").innerHTML=state.users
+    .filter(u=>u.id!==editingId&&u.status==="Active")
+    .sort((a,b)=>a.name.localeCompare(b.name))
+    .map(u=>`<option value="${esc(u.name)}"></option>`).join("");
+
+  el("identityRoles").innerHTML=IDENTITY_ROLE_CATALOG.map(role=>`
+    <label class="check-option"><input type="checkbox" name="roles" value="${esc(role)}"><span>${esc(role)}</span></label>
+  `).join("");
+
+  el("identityGroups").innerHTML=state.groups.map(g=>`
+    <label class="check-option ${g.dynamic?"disabled-option":""}">
+      <input type="checkbox" name="groups" value="${g.id}" ${g.dynamic?"disabled":""}>
+      <span>${esc(g.name)} ${g.dynamic?'<small>Dynamic</small>':""}</span>
+    </label>
+  `).join("");
+}
+
+function openIdentityEditor(id=null){
+  const form=el("identityForm");
+  form.reset();
+  populateIdentityChoices(id);
+  const u=id?state.users.find(x=>x.id===id):null;
+
+  el("identityModalTitle").textContent=u?"Edit identity":"Create identity";
+  el("identitySaveButton").textContent=u?"Save changes":"Create identity";
+  el("identityId").value=u?.id||"";
+
+  if(u){
+    el("identityName").value=u.name;
+    el("identityUpn").value=u.upn;
+    el("identityDept").value=u.dept;
+    el("identityManager").value=u.manager||"";
+    el("identityType").value=u.type;
+    el("identityMfa").value=String(u.mfa);
+    el("identityRisk").value=u.risk;
+    el("identityStatus").value=u.status;
+
+    form.querySelectorAll('input[name="roles"]').forEach(cb=>cb.checked=(u.roles||[]).includes(cb.value));
+    form.querySelectorAll('input[name="groups"]').forEach(cb=>{
+      cb.checked=(u.groups||[]).includes(cb.value);
+    });
+  }else{
+    el("identityType").value="Member";
+    el("identityMfa").value="true";
+    el("identityRisk").value="Low";
+    el("identityStatus").value="Active";
+  }
+
+  el("identityModal").classList.remove("hidden");
+}
+
+function closeIdentityEditor(){
+  el("identityModal").classList.add("hidden");
+}
+
+function nextIdentityId(){
+  const max=state.users.reduce((m,u)=>Math.max(m,Number(String(u.id).replace(/\D/g,""))||0),0);
+  return "U"+String(max+1).padStart(3,"0");
+}
+
+function adjustStaticGroupCounts(oldGroups,newGroups){
+  const oldSet=new Set(oldGroups||[]),newSet=new Set(newGroups||[]);
+  state.groups.filter(g=>!g.dynamic).forEach(g=>{
+    if(oldSet.has(g.id)&&!newSet.has(g.id))g.members=Math.max(0,(g.members||0)-1);
+    if(!oldSet.has(g.id)&&newSet.has(g.id))g.members=(g.members||0)+1;
+  });
+}
+
+function saveIdentityFromForm(e){
+  e.preventDefault();
+  const form=e.currentTarget,fd=new FormData(form);
+  const id=fd.get("id")||nextIdentityId();
+  const existing=state.users.find(u=>u.id===id);
+  const upn=String(fd.get("upn")||"").trim().toLowerCase();
+  const duplicate=state.users.find(u=>u.id!==id&&u.upn.toLowerCase()===upn);
+  if(duplicate){toast("UPN already exists","bad");return;}
+
+  const selectedRoles=fd.getAll("roles");
+  const selectedStaticGroups=fd.getAll("groups");
+  const dynamicGroups=existing?(existing.groups||[]).filter(gid=>state.groups.find(g=>g.id===gid)?.dynamic):[];
+  const groups=[...new Set([...selectedStaticGroups,...dynamicGroups])];
+
+  const record={
+    id,
+    name:String(fd.get("name")||"").trim(),
+    upn,
+    dept:String(fd.get("dept")||"Unassigned").trim()||"Unassigned",
+    manager:String(fd.get("manager")||"").trim(),
+    type:fd.get("type"),
+    mfa:fd.get("mfa")==="true",
+    risk:fd.get("risk"),
+    status:fd.get("status"),
+    lastSignIn:existing?.lastSignIn||"Never",
+    roles:selectedRoles,
+    groups
+  };
+
+  if(existing){
+    adjustStaticGroupCounts(existing.groups,groups);
+    Object.assign(existing,record);
+    state.audit.unshift({time:"Now",actor:"John Tyler",action:"Identity updated",target:record.name,result:"Success"});
+    toast("Identity updated");
+  }else{
+    adjustStaticGroupCounts([],groups);
+    state.users.push(record);
+    state.audit.unshift({time:"Now",actor:"John Tyler",action:"Identity created",target:record.name,result:"Success"});
+    toast("Identity created");
+  }
+
+  save();
+  closeIdentityEditor();
+  render();
+}
+
+function toggleIdentity(id){
+  const u=state.users.find(x=>x.id===id);if(!u)return;
+  u.status=u.status==="Active"?"Disabled":"Active";
+  state.audit.unshift({time:"Now",actor:"John Tyler",action:`Identity ${u.status==="Active"?"enabled":"disabled"}`,target:u.name,result:"Success"});
+  save();render();toast(`${u.name} ${u.status.toLowerCase()}`);
+}
+
+function deleteIdentity(id){
+  const u=state.users.find(x=>x.id===id);if(!u)return;
+  if(!confirm(`Delete ${u.name}? This removes the identity from the local directory. Historical request and audit records will remain.`))return;
+  adjustStaticGroupCounts(u.groups,[]);
+  state.users=state.users.filter(x=>x.id!==id);
+  state.audit.unshift({time:"Now",actor:"John Tyler",action:"Identity deleted",target:u.name,result:"Success"});
+  save();render();toast("Identity deleted","bad");
+}
+
+el("identityForm").addEventListener("submit",saveIdentityFromForm);
+document.querySelectorAll("[data-close-identity]").forEach(b=>b.addEventListener("click",closeIdentityEditor));
+el("identityModal").addEventListener("click",e=>{if(e.target===el("identityModal"))closeIdentityEditor()});
+
+window.openIdentityEditor=openIdentityEditor;
+window.toggleIdentity=toggleIdentity;
+window.deleteIdentity=deleteIdentity;
