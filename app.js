@@ -586,3 +586,198 @@ window.openGroupEditor=openGroupEditor;
 window.deleteGroup=deleteGroup;
 window.openRoleEditor=openRoleEditor;
 window.deleteRoleAssignment=deleteRoleAssignment;
+
+
+/* ---------- Editable privileged access and identity risk management ---------- */
+function nextPimId(){
+  const max=state.pim.reduce((m,p)=>Math.max(m,Number(String(p.id).replace(/\D/g,""))||0),0);
+  return "PIM-"+String(max+1).padStart(2,"0");
+}
+function nextRiskId(){
+  const max=state.risks.reduce((m,r)=>Math.max(m,Number(String(r.id).replace(/\D/g,""))||0),0);
+  return "R-"+String(max+1).padStart(2,"0");
+}
+function pimStateBadge(s){
+  return badge(s,s==="Active"?"good":s==="Eligible"?"blue":s==="Expired"?"neutral":"neutral");
+}
+function riskStatusBadge(s){
+  return badge(s,s==="Open"?"bad":s==="Remediated"?"good":s==="Accepted"?"warn":"neutral");
+}
+function privileged(){
+  const rows=filtered(state.pim).map(p=>`<tr>
+    <td>${esc(p.user)}</td>
+    <td>${esc(p.role)}</td>
+    <td class="wrap-cell">${esc(p.scope)}</td>
+    <td>${pimStateBadge(p.state)}</td>
+    <td>${esc(p.max)}</td>
+    <td>${p.mfa?badge("Required","good"):badge("Not required","neutral")}</td>
+    <td>${p.approval?badge("Required","blue"):badge("Not required","neutral")}</td>
+    <td>${esc(p.expires)}</td>
+    <td class="actions-cell">
+      <button class="button secondary" onclick="openPimEditor('${p.id}')">Edit</button>
+      <button class="button danger" onclick="deletePimRecord('${p.id}')">Delete</button>
+    </td>
+  </tr>`).join("");
+  return `<div class="card card-pad">
+    <div class="toolbar">
+      <div>
+        <p class="eyebrow">Privileged identity management</p>
+        <h2 style="margin:4px 0">Privileged Access</h2>
+        <div class="muted" style="font-size:12px">Manage eligible and active privileged assignments, scope, activation duration, MFA, approval, and expiration.</div>
+      </div>
+      <button class="button primary" onclick="openPimEditor()">+ Add privileged access</button>
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Identity</th><th>Role</th><th>Scope</th><th>State</th><th>Max activation</th><th>MFA</th><th>Approval</th><th>Expiration</th><th>Actions</th></tr></thead>
+      <tbody>${rows||'<tr><td colspan="9" class="empty">No matching privileged access records</td></tr>'}</tbody>
+    </table></div>
+  </div>`;
+}
+function openPimEditor(id=null){
+  const form=el("pimForm");form.reset();
+  const p=id?state.pim.find(x=>x.id===id):null;
+  el("pimUser").innerHTML=state.users
+    .filter(u=>u.status==="Active")
+    .sort((a,b)=>a.name.localeCompare(b.name))
+    .map(u=>`<option value="${esc(u.name)}">${esc(u.name)} — ${esc(u.dept)}</option>`).join("");
+  el("pimModalTitle").textContent=p?"Edit privileged access":"Create privileged access record";
+  el("pimSaveButton").textContent=p?"Save changes":"Create record";
+  el("pimId").value=p?.id||"";
+  if(p){
+    el("pimUser").value=p.user;
+    el("pimRole").value=p.role;
+    el("pimScope").value=p.scope;
+    el("pimState").value=p.state;
+    el("pimMax").value=p.max;
+    el("pimExpires").value=p.expires;
+    el("pimMfa").value=String(p.mfa);
+    el("pimApproval").value=String(p.approval);
+  }else{
+    el("pimState").value="Eligible";
+    el("pimMax").value="4h";
+    el("pimMfa").value="true";
+    el("pimApproval").value="true";
+  }
+  el("pimModal").classList.remove("hidden");
+}
+function closePimEditor(){el("pimModal").classList.add("hidden")}
+function savePimFromForm(e){
+  e.preventDefault();
+  const fd=new FormData(e.currentTarget),id=fd.get("id")||nextPimId();
+  const existing=state.pim.find(p=>p.id===id);
+  const record={
+    id,
+    user:fd.get("user"),
+    role:fd.get("role"),
+    scope:String(fd.get("scope")||"").trim(),
+    state:fd.get("state"),
+    expires:String(fd.get("expires")||"").trim(),
+    max:fd.get("max"),
+    mfa:fd.get("mfa")==="true",
+    approval:fd.get("approval")==="true"
+  };
+  if(existing)Object.assign(existing,record);else state.pim.push(record);
+  state.audit.unshift({
+    time:"Now",actor:"John Tyler",
+    action:existing?"Privileged access updated":"Privileged access created",
+    target:`${record.user} · ${record.role}`,result:"Success"
+  });
+  save();closePimEditor();render();toast(existing?"Privileged access updated":"Privileged access created");
+}
+function deletePimRecord(id){
+  const p=state.pim.find(x=>x.id===id);if(!p)return;
+  if(!confirm(`Delete privileged access record for ${p.user} — ${p.role}?`))return;
+  state.pim=state.pim.filter(x=>x.id!==id);
+  state.audit.unshift({time:"Now",actor:"John Tyler",action:"Privileged access deleted",target:`${p.user} · ${p.role}`,result:"Success"});
+  save();render();toast("Privileged access deleted","bad");
+}
+
+function risks(){
+  const rows=filtered(state.risks).map(r=>`<tr>
+    <td>${riskBadge(r.severity)}</td>
+    <td class="name-cell"><strong>${esc(r.title)}</strong><span>${esc(r.detail)}</span></td>
+    <td>${esc(r.entity)}</td>
+    <td>${riskStatusBadge(r.status)}</td>
+    <td class="actions-cell">
+      <button class="button secondary" onclick="openRiskEditor('${r.id}')">Edit</button>
+      ${r.status==="Open"?`<button class="button ghost" onclick="remediate('${r.id}')">Remediate</button>`:""}
+      <button class="button danger" onclick="deleteRiskFinding('${r.id}')">Delete</button>
+    </td>
+  </tr>`).join("");
+  return `<div class="card card-pad">
+    <div class="toolbar">
+      <div>
+        <p class="eyebrow">Identity risk management</p>
+        <h2 style="margin:4px 0">Identity Risks</h2>
+        <div class="muted" style="font-size:12px">Create, edit, remediate, accept, and remove identity-risk findings for your tenant simulation.</div>
+      </div>
+      <button class="button primary" onclick="openRiskEditor()">+ Create risk finding</button>
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Severity</th><th>Finding</th><th>Entity</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody>${rows||'<tr><td colspan="5" class="empty">No matching risk findings</td></tr>'}</tbody>
+    </table></div>
+  </div>`;
+}
+function openRiskEditor(id=null){
+  const form=el("riskForm");form.reset();
+  const r=id?state.risks.find(x=>x.id===id):null;
+  el("riskEntityOptions").innerHTML=state.users
+    .sort((a,b)=>a.name.localeCompare(b.name))
+    .map(u=>`<option value="${esc(u.name)}"></option>`).join("");
+  el("riskModalTitle").textContent=r?"Edit risk finding":"Create risk finding";
+  el("riskSaveButton").textContent=r?"Save changes":"Create finding";
+  el("riskId").value=r?.id||"";
+  if(r){
+    el("riskSeverity").value=r.severity;
+    el("riskEntity").value=r.entity;
+    el("riskTitle").value=r.title;
+    el("riskDetail").value=r.detail;
+    el("riskStatus").value=r.status;
+  }else{
+    el("riskSeverity").value="Medium";
+    el("riskStatus").value="Open";
+  }
+  el("riskModal").classList.remove("hidden");
+}
+function closeRiskEditor(){el("riskModal").classList.add("hidden")}
+function saveRiskFromForm(e){
+  e.preventDefault();
+  const fd=new FormData(e.currentTarget),id=fd.get("id")||nextRiskId();
+  const existing=state.risks.find(r=>r.id===id);
+  const record={
+    id,
+    severity:fd.get("severity"),
+    title:String(fd.get("title")||"").trim(),
+    entity:String(fd.get("entity")||"").trim(),
+    detail:String(fd.get("detail")||"").trim(),
+    status:fd.get("status")
+  };
+  if(existing)Object.assign(existing,record);else state.risks.push(record);
+  state.audit.unshift({
+    time:"Now",actor:"John Tyler",
+    action:existing?"Identity risk updated":"Identity risk created",
+    target:`${record.entity} · ${record.title}`,result:"Success"
+  });
+  save();closeRiskEditor();render();toast(existing?"Risk finding updated":"Risk finding created");
+}
+function deleteRiskFinding(id){
+  const r=state.risks.find(x=>x.id===id);if(!r)return;
+  if(!confirm(`Delete risk finding "${r.title}" for ${r.entity}?`))return;
+  state.risks=state.risks.filter(x=>x.id!==id);
+  state.audit.unshift({time:"Now",actor:"John Tyler",action:"Identity risk deleted",target:`${r.entity} · ${r.title}`,result:"Success"});
+  save();render();toast("Risk finding deleted","bad");
+}
+
+el("pimForm").addEventListener("submit",savePimFromForm);
+document.querySelectorAll("[data-close-pim]").forEach(b=>b.addEventListener("click",closePimEditor));
+el("pimModal").addEventListener("click",e=>{if(e.target===el("pimModal"))closePimEditor()});
+
+el("riskForm").addEventListener("submit",saveRiskFromForm);
+document.querySelectorAll("[data-close-risk]").forEach(b=>b.addEventListener("click",closeRiskEditor));
+el("riskModal").addEventListener("click",e=>{if(e.target===el("riskModal"))closeRiskEditor()});
+
+window.openPimEditor=openPimEditor;
+window.deletePimRecord=deletePimRecord;
+window.openRiskEditor=openRiskEditor;
+window.deleteRiskFinding=deleteRiskFinding;
