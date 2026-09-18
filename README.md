@@ -6,10 +6,10 @@ A browser-based enterprise IAM governance simulation designed to demonstrate pra
 
 This project models workflows that appear in real identity governance and cloud-security environments:
 
-- Workforce and guest identity inventory
+- Full workforce and guest identity lifecycle management (create, edit, enable/disable, delete)
 - MFA registration posture
-- Security groups and group-based authorization
-- Azure RBAC assignments and scope
+- Security groups, group memberships, and group-based authorization
+- Azure RBAC assignments, identity role management, and scope
 - Access request and approval workflows
 - Privileged Identity Management-style eligibility and activation controls
 - Access reviews and recertification
@@ -45,7 +45,7 @@ Microsoft Graph
 | Module | Enterprise concept |
 | --- | --- |
 | Dashboard | Governance posture and operational metrics |
-| Identities | Workforce/guest identity inventory |
+| Identities | CRUD lifecycle management, MFA/risk attributes, roles, and group memberships |
 | Groups | Group-based authorization |
 | Roles & RBAC | Azure role assignments and scope |
 | Access Requests | Entitlement approval workflow |
