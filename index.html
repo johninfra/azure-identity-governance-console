@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Enterprise-style identity governance and privileged access management console built for Azure IAM portfolio demonstration.">
+  <meta name="theme-color" content="#07111f">
+  <title>Azure Identity Governance Console</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" role="img"><path d="M12 2 4.5 5.2v5.9c0 4.8 3.1 9.2 7.5 10.9 4.4-1.7 7.5-6.1 7.5-10.9V5.2L12 2Zm0 3.1 4.6 2v4c0 3.3-1.8 6.4-4.6 7.8-2.8-1.4-4.6-4.5-4.6-7.8v-4l4.6-2Zm-1.1 4v2H9v2h1.9v2H13v-2h2v-2h-2v-2h-2.1Z"/></svg>
+        </div>
+        <div>
+          <strong>Identity Governance</strong>
+          <span>Azure Enterprise Lab</span>
+        </div>
+      </div>
+
+      <nav class="nav" aria-label="Primary navigation">
+        <button class="nav-item active" data-view="dashboard"><span class="nav-glyph">D</span>Dashboard</button>
+        <button class="nav-item" data-view="identities"><span class="nav-glyph">I</span>Identities</button>
+        <button class="nav-item" data-view="groups"><span class="nav-glyph">G</span>Groups</button>
+        <button class="nav-item" data-view="roles"><span class="nav-glyph">R</span>Roles & RBAC</button>
+        <button class="nav-item" data-view="requests"><span class="nav-glyph">A</span>Access Requests <span class="nav-count" id="pendingNavCount">0</span></button>
+        <button class="nav-item" data-view="privileged"><span class="nav-glyph">P</span>Privileged Access</button>
+        <button class="nav-item" data-view="reviews"><span class="nav-glyph">V</span>Access Reviews</button>
+        <button class="nav-item" data-view="risks"><span class="nav-glyph">!</span>Identity Risks</button>
+        <button class="nav-item" data-view="policies"><span class="nav-glyph">C</span>Conditional Access</button>
+        <button class="nav-item" data-view="audit"><span class="nav-glyph">L</span>Audit Logs</button>
+        <button class="nav-item" data-view="reports"><span class="nav-glyph">E</span>Reports & Data</button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="tenant-card">
+          <span class="status-dot"></span>
+          <div><strong>Contoso Enterprise</strong><small>Production tenant · Demo</small></div>
+        </div>
+        <div class="local-badge">Browser-local data</div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="topbar-left">
+          <button id="menuButton" class="icon-button mobile-only" aria-label="Toggle navigation">☰</button>
+          <div>
+            <p class="eyebrow">Microsoft Entra · Governance Operations</p>
+            <h1 id="pageTitle">Executive Dashboard</h1>
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <label class="search-box">
+            <span>⌕</span>
+            <input id="globalSearch" type="search" placeholder="Search current view" aria-label="Search current view">
+          </label>
+          <button class="button secondary" id="newRequestButton">+ New access request</button>
+          <div class="operator">
+            <div class="avatar">JT</div>
+            <div><strong>John Tyler</strong><span>Identity Administrator</span></div>
+          </div>
+        </div>
+      </header>
+
+      <section class="content" id="content" aria-live="polite"></section>
+    </main>
+  </div>
+
+  <div class="modal-backdrop hidden" id="requestModal" role="dialog" aria-modal="true" aria-labelledby="requestModalTitle">
+    <div class="modal">
+      <div class="modal-header">
+        <div>
+          <p class="eyebrow">Identity workflow</p>
+          <h2 id="requestModalTitle">New access request</h2>
+        </div>
+        <button class="icon-button" data-close-modal aria-label="Close">×</button>
+      </div>
+      <form id="requestForm">
+        <div class="form-grid">
+          <label>User
+            <select name="userId" id="requestUser" required></select>
+          </label>
+          <label>Requested access
+            <select name="role" required>
+              <option>Reader</option>
+              <option>Virtual Machine Contributor</option>
+              <option>Security Reader</option>
+              <option>User Administrator</option>
+              <option>Key Vault Secrets User</option>
+              <option>Contributor</option>
+            </select>
+          </label>
+          <label>Resource scope
+            <select name="scope" required>
+              <option>rg-app-production</option>
+              <option>rg-security-operations</option>
+              <option>rg-data-platform</option>
+              <option>Subscription: Corporate Azure</option>
+              <option>Tenant directory</option>
+            </select>
+          </label>
+          <label>Duration
+            <select name="duration" required>
+              <option>8 hours</option>
+              <option>24 hours</option>
+              <option>7 days</option>
+              <option>30 days</option>
+              <option>Permanent</option>
+            </select>
+          </label>
+          <label class="full-span">Business justification
+            <textarea name="justification" rows="4" maxlength="240" required placeholder="Explain why this access is required..."></textarea>
+          </label>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="button ghost" data-close-modal>Cancel</button>
+          <button type="submit" class="button primary">Submit request</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="toast-stack" id="toastStack" aria-live="polite"></div>
+
+  <noscript>
+    <div class="noscript">JavaScript is required to use this governance console.</div>
+  </noscript>
+  <script src="app.js"></script>
+</body>
+</html>
