@@ -124,6 +124,77 @@
     </div>
   </div>
 
+  <div class="modal-backdrop hidden" id="identityModal" role="dialog" aria-modal="true" aria-labelledby="identityModalTitle">
+    <div class="modal wide">
+      <div class="modal-header">
+        <div>
+          <p class="eyebrow">Identity lifecycle</p>
+          <h2 id="identityModalTitle">Create identity</h2>
+        </div>
+        <button class="icon-button" data-close-identity aria-label="Close">×</button>
+      </div>
+      <form id="identityForm">
+        <input type="hidden" name="id" id="identityId">
+        <div class="form-grid">
+          <label>Display name
+            <input name="name" id="identityName" maxlength="80" required placeholder="e.g. Olivia Brown">
+          </label>
+          <label>User principal name
+            <input name="upn" id="identityUpn" maxlength="120" required placeholder="user@contoso.com">
+          </label>
+          <label>Department
+            <input name="dept" id="identityDept" list="departmentOptions" maxlength="60" required placeholder="e.g. Finance">
+            <datalist id="departmentOptions"></datalist>
+          </label>
+          <label>Manager
+            <input name="manager" id="identityManager" list="managerOptions" maxlength="80" placeholder="e.g. Marcus Lee">
+            <datalist id="managerOptions"></datalist>
+          </label>
+          <label>User type
+            <select name="type" id="identityType" required>
+              <option value="Member">Member</option>
+              <option value="Guest">Guest</option>
+            </select>
+          </label>
+          <label>MFA status
+            <select name="mfa" id="identityMfa" required>
+              <option value="true">Registered</option>
+              <option value="false">Missing</option>
+            </select>
+          </label>
+          <label>Risk level
+            <select name="risk" id="identityRisk" required>
+              <option value="Low">Low</option>
+              <option value="Medium">Medium</option>
+              <option value="High">High</option>
+            </select>
+          </label>
+          <label>Account status
+            <select name="status" id="identityStatus" required>
+              <option value="Active">Active</option>
+              <option value="Disabled">Disabled</option>
+            </select>
+          </label>
+
+          <fieldset class="full-span access-fieldset">
+            <legend>Assigned roles</legend>
+            <div class="checkbox-grid" id="identityRoles"></div>
+          </fieldset>
+
+          <fieldset class="full-span access-fieldset">
+            <legend>Group memberships</legend>
+            <div class="checkbox-grid" id="identityGroups"></div>
+            <p class="field-help">Dynamic groups are shown for visibility but cannot be manually assigned or removed.</p>
+          </fieldset>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="button ghost" data-close-identity>Cancel</button>
+          <button type="submit" class="button primary" id="identitySaveButton">Create identity</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div class="toast-stack" id="toastStack" aria-live="polite"></div>
 
   <noscript>
