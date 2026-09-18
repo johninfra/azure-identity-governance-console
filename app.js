@@ -505,7 +505,7 @@ function deleteGroup(id){
 }
 
 function roles(){
-  const rows=filtered(state.roleAssignments).map((r,i)=>`<tr>
+  const rows=filtered(state.roleAssignments).map(r=>{const i=state.roleAssignments.indexOf(r);return `<tr>
     <td><strong>${esc(r.principal)}</strong></td>
     <td>${esc(r.role)}</td>
     <td class="wrap-cell">${esc(r.scope)}</td>
@@ -515,7 +515,7 @@ function roles(){
       <button class="button secondary" onclick="openRoleEditor(${i})">Edit</button>
       <button class="button danger" onclick="deleteRoleAssignment(${i})">Delete</button>
     </td>
-  </tr>`).join("");
+  </tr>`}).join("");
   return `<div class="card card-pad">
     <div class="toolbar">
       <div>
