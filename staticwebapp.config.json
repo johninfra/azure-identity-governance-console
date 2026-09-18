@@ -13,8 +13,11 @@
             }
           },
           "login": {
-            "nameClaimType": "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name",
-            "scopes": [],
+            "nameClaimType": "preferred_username",
+            "scopes": [
+              "profile",
+              "email"
+            ],
             "loginParameterNames": []
           }
         }
