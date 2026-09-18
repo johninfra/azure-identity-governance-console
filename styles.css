@@ -23,3 +23,18 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.app-shell{displ
 @media(max-width:1100px){.metrics{grid-template-columns:repeat(2,1fr)}.two-col,.three-col{grid-template-columns:1fr}.operator>div:last-child{display:none}.search-box input{width:135px}}
 @media(max-width:820px){.app-shell{grid-template-columns:1fr}.sidebar{position:fixed;left:-290px;z-index:80;width:270px;transition:.2s}.sidebar.open{left:0}.mobile-only{display:inline-grid}.topbar{padding:14px 16px}.topbar-actions .search-box{display:none}.content{padding:16px}.metrics{grid-template-columns:1fr 1fr}.operator{display:none}}
 @media(max-width:520px){.metrics,.stat-strip,.form-grid{grid-template-columns:1fr}.topbar-actions .secondary{display:none}.content{padding:12px}.full-span{grid-column:auto}}
+
+.modal.wide{width:min(920px,100%);max-height:92vh;overflow:auto}
+.form-grid input{background:#091624;border:1px solid #29405a;color:white;border-radius:9px;padding:10px}
+.access-fieldset{border:1px solid #29405a;border-radius:11px;padding:13px 14px 14px;background:#091624}
+.access-fieldset legend{padding:0 7px;color:#cfe2f3;font-size:11px;font-weight:800}
+.checkbox-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.check-option{display:flex!important;flex-direction:row!important;align-items:center;gap:8px!important;padding:9px 10px;border:1px solid #1f354a;border-radius:9px;background:#0c1b2b;color:#cfe0ef!important;font-weight:600!important}
+.check-option input{width:auto!important;margin:0;accent-color:#1685e6}
+.check-option small{display:inline-block;margin-left:6px;color:#7f97ad;font-size:9px;text-transform:uppercase;letter-spacing:.06em}
+.disabled-option{opacity:.58}
+.field-help{margin:9px 0 0;color:#8197ac;font-size:10px}
+.wrap-cell{white-space:normal;min-width:160px;max-width:260px;line-height:1.45}
+.actions-cell{white-space:nowrap}
+.actions-cell .button{margin:2px}
+@media(max-width:700px){.checkbox-grid{grid-template-columns:1fr}.modal.wide{max-height:96vh}}
