@@ -295,6 +295,121 @@
     </div>
   </div>
 
+  <div class="modal-backdrop hidden" id="pimModal" role="dialog" aria-modal="true" aria-labelledby="pimModalTitle">
+    <div class="modal wide">
+      <div class="modal-header">
+        <div>
+          <p class="eyebrow">Privileged access lifecycle</p>
+          <h2 id="pimModalTitle">Create privileged access record</h2>
+        </div>
+        <button class="icon-button" data-close-pim aria-label="Close">×</button>
+      </div>
+      <form id="pimForm">
+        <input type="hidden" name="id" id="pimId">
+        <div class="form-grid">
+          <label>Identity
+            <select name="user" id="pimUser" required></select>
+          </label>
+          <label>Privileged role
+            <select name="role" id="pimRole" required>
+              <option>Contributor</option>
+              <option>Owner</option>
+              <option>User Access Administrator</option>
+              <option>Security Administrator</option>
+              <option>User Administrator</option>
+              <option>Global Reader</option>
+              <option>Virtual Machine Contributor</option>
+              <option>Key Vault Administrator</option>
+            </select>
+          </label>
+          <label>Scope
+            <input name="scope" id="pimScope" maxlength="140" required placeholder="e.g. Tenant directory or rg-app-production">
+          </label>
+          <label>Access state
+            <select name="state" id="pimState" required>
+              <option value="Eligible">Eligible</option>
+              <option value="Active">Active</option>
+              <option value="Expired">Expired</option>
+            </select>
+          </label>
+          <label>Maximum activation
+            <select name="max" id="pimMax" required>
+              <option>1h</option>
+              <option>2h</option>
+              <option>4h</option>
+              <option>8h</option>
+              <option>24h</option>
+            </select>
+          </label>
+          <label>Expiration
+            <input name="expires" id="pimExpires" maxlength="60" required placeholder="e.g. Oct 01 or Today 17:30">
+          </label>
+          <label>MFA required
+            <select name="mfa" id="pimMfa" required>
+              <option value="true">Required</option>
+              <option value="false">Not required</option>
+            </select>
+          </label>
+          <label>Approval required
+            <select name="approval" id="pimApproval" required>
+              <option value="true">Required</option>
+              <option value="false">Not required</option>
+            </select>
+          </label>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="button ghost" data-close-pim>Cancel</button>
+          <button type="submit" class="button primary" id="pimSaveButton">Create record</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-backdrop hidden" id="riskModal" role="dialog" aria-modal="true" aria-labelledby="riskModalTitle">
+    <div class="modal wide">
+      <div class="modal-header">
+        <div>
+          <p class="eyebrow">Identity risk management</p>
+          <h2 id="riskModalTitle">Create risk finding</h2>
+        </div>
+        <button class="icon-button" data-close-risk aria-label="Close">×</button>
+      </div>
+      <form id="riskForm">
+        <input type="hidden" name="id" id="riskId">
+        <div class="form-grid">
+          <label>Severity
+            <select name="severity" id="riskSeverity" required>
+              <option value="High">High</option>
+              <option value="Medium">Medium</option>
+              <option value="Low">Low</option>
+            </select>
+          </label>
+          <label>Entity
+            <input name="entity" id="riskEntity" list="riskEntityOptions" maxlength="100" required placeholder="Identity or resource name">
+            <datalist id="riskEntityOptions"></datalist>
+          </label>
+          <label class="full-span">Finding title
+            <input name="title" id="riskTitle" maxlength="120" required placeholder="e.g. MFA not registered">
+          </label>
+          <label class="full-span">Finding detail
+            <textarea name="detail" id="riskDetail" rows="4" maxlength="400" required placeholder="Describe the risk and why it matters..."></textarea>
+          </label>
+          <label>Status
+            <select name="status" id="riskStatus" required>
+              <option value="Open">Open</option>
+              <option value="Remediated">Remediated</option>
+              <option value="Accepted">Accepted</option>
+            </select>
+          </label>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="button ghost" data-close-risk>Cancel</button>
+          <button type="submit" class="button primary" id="riskSaveButton">Create finding</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div class="toast-stack" id="toastStack" aria-live="polite"></div>
 
   <noscript>
