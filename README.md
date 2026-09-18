@@ -8,8 +8,8 @@ This project models workflows that appear in real identity governance and cloud-
 
 - Full workforce and guest identity lifecycle management (create, edit, enable/disable, delete)
 - MFA registration posture
-- Security groups, group memberships, and group-based authorization
-- Azure RBAC assignments, identity role management, and scope
+- Editable security and Microsoft 365 groups with owner, membership type, and user membership management
+- Editable Azure RBAC assignments with principal, role, scope, source, and privileged classification
 - Access request and approval workflows
 - Privileged Identity Management-style eligibility and activation controls
 - Access reviews and recertification
@@ -46,8 +46,8 @@ Microsoft Graph
 | --- | --- |
 | Dashboard | Governance posture and operational metrics |
 | Identities | CRUD lifecycle management, MFA/risk attributes, roles, and group memberships |
-| Groups | Group-based authorization |
-| Roles & RBAC | Azure role assignments and scope |
+| Groups | CRUD group lifecycle, owners, assigned/dynamic membership, and user memberships |
+| Roles & RBAC | CRUD Azure RBAC assignments with principal, role, scope, source, and privilege classification |
 | Access Requests | Entitlement approval workflow |
 | Privileged Access | Just-in-time privilege / PIM concepts |
 | Access Reviews | Periodic access recertification |
