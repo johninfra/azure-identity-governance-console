@@ -376,3 +376,213 @@ el("identityModal").addEventListener("click",e=>{if(e.target===el("identityModal
 window.openIdentityEditor=openIdentityEditor;
 window.toggleIdentity=toggleIdentity;
 window.deleteIdentity=deleteIdentity;
+
+
+/* ---------- Group and Azure RBAC administration ---------- */
+function nextGroupId(){
+  const max=state.groups.reduce((m,g)=>Math.max(m,Number(String(g.id).replace(/\D/g,""))||0),0);
+  return "G"+String(max+1).padStart(3,"0");
+}
+
+function groupMemberUsers(groupId){
+  return state.users.filter(u=>(u.groups||[]).includes(groupId));
+}
+
+function groups(){
+  const rows=filtered(state.groups).map(g=>{
+    const members=groupMemberUsers(g.id);
+    return `<tr>
+      <td class="name-cell"><strong>${esc(g.name)}</strong><span>${esc(g.id)}</span></td>
+      <td>${esc(g.type)}</td>
+      <td>${g.members}</td>
+      <td>${esc(g.owner)}</td>
+      <td>${g.dynamic?badge("Dynamic","blue"):badge("Assigned","neutral")}</td>
+      <td class="wrap-cell">${members.length?members.map(u=>esc(u.name)).join(", "):"No demo users assigned"}</td>
+      <td class="actions-cell">
+        <button class="button secondary" onclick="openGroupEditor('${g.id}')">Edit</button>
+        <button class="button danger" onclick="deleteGroup('${g.id}')">Delete</button>
+      </td>
+    </tr>`;
+  }).join("");
+  return `<div class="card card-pad">
+    <div class="toolbar">
+      <div>
+        <p class="eyebrow">Group lifecycle</p>
+        <h2 style="margin:4px 0">Groups & membership</h2>
+        <div class="muted" style="font-size:12px">Manage security groups, Microsoft 365 groups, owners, membership type, and local demo-user membership.</div>
+      </div>
+      <button class="button primary" onclick="openGroupEditor()">+ Create group</button>
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Group</th><th>Type</th><th>Members</th><th>Owner</th><th>Membership</th><th>Demo members</th><th>Actions</th></tr></thead>
+      <tbody>${rows||'<tr><td colspan="7" class="empty">No matching groups</td></tr>'}</tbody>
+    </table></div>
+  </div>`;
+}
+
+function openGroupEditor(id=null){
+  const form=el("groupForm");form.reset();
+  const g=id?state.groups.find(x=>x.id===id):null;
+  el("groupModalTitle").textContent=g?"Edit group":"Create group";
+  el("groupSaveButton").textContent=g?"Save changes":"Create group";
+  el("groupId").value=g?.id||"";
+  el("groupOriginalName").value=g?.name||"";
+  el("groupOwnerOptions").innerHTML=state.users
+    .filter(u=>u.status==="Active")
+    .sort((a,b)=>a.name.localeCompare(b.name))
+    .map(u=>`<option value="${esc(u.name)}"></option>`).join("");
+  el("groupMembers").innerHTML=state.users
+    .sort((a,b)=>a.name.localeCompare(b.name))
+    .map(u=>`<label class="check-option"><input type="checkbox" name="members" value="${u.id}"><span>${esc(u.name)} <small>${esc(u.dept)}</small></span></label>`).join("");
+  if(g){
+    el("groupName").value=g.name;el("groupType").value=g.type;el("groupOwner").value=g.owner;
+    el("groupDynamic").value=String(g.dynamic);
+    form.querySelectorAll('input[name="members"]').forEach(cb=>cb.checked=(state.users.find(u=>u.id===cb.value)?.groups||[]).includes(g.id));
+  }else{
+    el("groupType").value="Security";el("groupDynamic").value="false";
+  }
+  syncGroupMembershipControls();
+  el("groupModal").classList.remove("hidden");
+}
+
+function syncGroupMembershipControls(){
+  const dynamic=el("groupDynamic").value==="true";
+  el("groupMembers").querySelectorAll('input[name="members"]').forEach(cb=>cb.disabled=dynamic);
+  el("groupMemberHelp").textContent=dynamic
+    ?"Dynamic group memberships are rule-driven and cannot be manually edited in this simulation."
+    :"Assigned groups can be managed manually.";
+}
+
+function closeGroupEditor(){el("groupModal").classList.add("hidden")}
+
+function saveGroupFromForm(e){
+  e.preventDefault();
+  const fd=new FormData(e.currentTarget),id=fd.get("id")||nextGroupId();
+  const existing=state.groups.find(g=>g.id===id),oldName=existing?.name||"";
+  const name=String(fd.get("name")||"").trim();
+  if(state.groups.some(g=>g.id!==id&&g.name.toLowerCase()===name.toLowerCase())){toast("Group name already exists","bad");return}
+  const dynamic=fd.get("dynamic")==="true";
+  const selectedUsers=dynamic?null:new Set(fd.getAll("members"));
+  const record={id,name,type:fd.get("type"),owner:String(fd.get("owner")||"").trim(),dynamic,members:existing?.members||0};
+
+  if(existing){
+    Object.assign(existing,record);
+    if(oldName!==name){
+      state.roleAssignments.forEach(r=>{if(r.principal===oldName)r.principal=name});
+      state.reviews.forEach(r=>{if(r.scope===oldName)r.scope=name});
+    }
+  }else{
+    state.groups.push(record);
+  }
+
+  if(!dynamic){
+    state.users.forEach(u=>{
+      const has=(u.groups||[]).includes(id),want=selectedUsers.has(u.id);
+      if(want&&!has)u.groups.push(id);
+      if(!want&&has)u.groups=u.groups.filter(gid=>gid!==id);
+    });
+    record.members=groupMemberUsers(id).length;
+  }else if(!existing){
+    record.members=0;
+  }
+
+  state.audit.unshift({time:"Now",actor:"John Tyler",action:existing?"Group updated":"Group created",target:name,result:"Success"});
+  save();closeGroupEditor();render();toast(existing?"Group updated":"Group created");
+}
+
+function deleteGroup(id){
+  const g=state.groups.find(x=>x.id===id);if(!g)return;
+  const assignmentCount=state.roleAssignments.filter(r=>r.principal===g.name).length;
+  const msg=assignmentCount
+    ?`Delete ${g.name}? This also removes ${assignmentCount} RBAC assignment(s) tied to this group.`
+    :`Delete ${g.name}? This removes the group from all local identity memberships.`;
+  if(!confirm(msg))return;
+  state.users.forEach(u=>u.groups=(u.groups||[]).filter(gid=>gid!==id));
+  state.roleAssignments=state.roleAssignments.filter(r=>r.principal!==g.name);
+  state.groups=state.groups.filter(x=>x.id!==id);
+  state.audit.unshift({time:"Now",actor:"John Tyler",action:"Group deleted",target:g.name,result:"Success"});
+  save();render();toast("Group deleted","bad");
+}
+
+function roles(){
+  const rows=filtered(state.roleAssignments).map((r,i)=>`<tr>
+    <td><strong>${esc(r.principal)}</strong></td>
+    <td>${esc(r.role)}</td>
+    <td class="wrap-cell">${esc(r.scope)}</td>
+    <td>${badge(r.source,r.source==="Group"?"good":r.source==="PIM"?"purple":"warn")}</td>
+    <td>${r.privileged?badge("Privileged","purple"):badge("Standard","neutral")}</td>
+    <td class="actions-cell">
+      <button class="button secondary" onclick="openRoleEditor(${i})">Edit</button>
+      <button class="button danger" onclick="deleteRoleAssignment(${i})">Delete</button>
+    </td>
+  </tr>`).join("");
+  return `<div class="card card-pad">
+    <div class="toolbar">
+      <div>
+        <p class="eyebrow">Azure authorization</p>
+        <h2 style="margin:4px 0">Azure Roles & RBAC</h2>
+        <div class="muted" style="font-size:12px">Create, edit, and remove role assignments across identities and groups with role, scope, source, and privilege classification.</div>
+      </div>
+      <button class="button primary" onclick="openRoleEditor()">+ Create assignment</button>
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Principal</th><th>Role</th><th>Scope</th><th>Source</th><th>Classification</th><th>Actions</th></tr></thead>
+      <tbody>${rows||'<tr><td colspan="6" class="empty">No matching RBAC assignments</td></tr>'}</tbody>
+    </table></div>
+  </div>`;
+}
+
+function populateRolePrincipals(){
+  const users=state.users.filter(u=>u.status==="Active").map(u=>({value:u.name,label:`User · ${u.name}`}));
+  const groups=state.groups.map(g=>({value:g.name,label:`Group · ${g.name}`}));
+  el("rolePrincipal").innerHTML=[...users,...groups].sort((a,b)=>a.label.localeCompare(b.label))
+    .map(x=>`<option value="${esc(x.value)}">${esc(x.label)}</option>`).join("");
+}
+
+function openRoleEditor(index=null){
+  const form=el("roleForm");form.reset();populateRolePrincipals();
+  const r=index===null?null:state.roleAssignments[index];
+  el("roleModalTitle").textContent=r?"Edit RBAC assignment":"Create RBAC assignment";
+  el("roleSaveButton").textContent=r?"Save changes":"Create assignment";
+  el("roleIndex").value=index===null?"":String(index);
+  if(r){
+    el("rolePrincipal").value=r.principal;el("roleName").value=r.role;el("roleScope").value=r.scope;
+    el("roleSource").value=r.source;el("rolePrivileged").value=String(r.privileged);
+  }else{
+    el("roleSource").value="Direct";el("rolePrivileged").value="false";
+  }
+  el("roleModal").classList.remove("hidden");
+}
+function closeRoleEditor(){el("roleModal").classList.add("hidden")}
+
+function saveRoleFromForm(e){
+  e.preventDefault();const fd=new FormData(e.currentTarget);
+  const rawIndex=fd.get("index"),index=rawIndex===""?null:Number(rawIndex);
+  const record={principal:fd.get("principal"),role:fd.get("role"),scope:String(fd.get("scope")||"").trim(),source:fd.get("source"),privileged:fd.get("privileged")==="true"};
+  const action=index===null?"RBAC assignment created":"RBAC assignment updated";
+  if(index===null)state.roleAssignments.push(record);else state.roleAssignments[index]=record;
+  state.audit.unshift({time:"Now",actor:"John Tyler",action,target:`${record.principal} · ${record.role}`,result:"Success"});
+  save();closeRoleEditor();render();toast(index===null?"RBAC assignment created":"RBAC assignment updated");
+}
+
+function deleteRoleAssignment(index){
+  const r=state.roleAssignments[index];if(!r)return;
+  if(!confirm(`Delete ${r.role} assignment for ${r.principal} at ${r.scope}?`))return;
+  state.roleAssignments.splice(index,1);
+  state.audit.unshift({time:"Now",actor:"John Tyler",action:"RBAC assignment deleted",target:`${r.principal} · ${r.role}`,result:"Success"});
+  save();render();toast("RBAC assignment deleted","bad");
+}
+
+el("groupForm").addEventListener("submit",saveGroupFromForm);
+el("groupDynamic").addEventListener("change",syncGroupMembershipControls);
+document.querySelectorAll("[data-close-group]").forEach(b=>b.addEventListener("click",closeGroupEditor));
+el("groupModal").addEventListener("click",e=>{if(e.target===el("groupModal"))closeGroupEditor()});
+
+el("roleForm").addEventListener("submit",saveRoleFromForm);
+document.querySelectorAll("[data-close-role]").forEach(b=>b.addEventListener("click",closeRoleEditor));
+el("roleModal").addEventListener("click",e=>{if(e.target===el("roleModal"))closeRoleEditor()});
+
+window.openGroupEditor=openGroupEditor;
+window.deleteGroup=deleteGroup;
+window.openRoleEditor=openRoleEditor;
+window.deleteRoleAssignment=deleteRoleAssignment;
