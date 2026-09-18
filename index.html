@@ -195,6 +195,106 @@
     </div>
   </div>
 
+  <div class="modal-backdrop hidden" id="groupModal" role="dialog" aria-modal="true" aria-labelledby="groupModalTitle">
+    <div class="modal wide">
+      <div class="modal-header">
+        <div>
+          <p class="eyebrow">Group lifecycle</p>
+          <h2 id="groupModalTitle">Create group</h2>
+        </div>
+        <button class="icon-button" data-close-group aria-label="Close">×</button>
+      </div>
+      <form id="groupForm">
+        <input type="hidden" name="id" id="groupId">
+        <input type="hidden" name="originalName" id="groupOriginalName">
+        <div class="form-grid">
+          <label>Group name
+            <input name="name" id="groupName" maxlength="100" required placeholder="e.g. SG-Cloud-Operators">
+          </label>
+          <label>Group type
+            <select name="type" id="groupType" required>
+              <option value="Security">Security</option>
+              <option value="Microsoft 365">Microsoft 365</option>
+            </select>
+          </label>
+          <label>Owner
+            <input name="owner" id="groupOwner" list="groupOwnerOptions" maxlength="80" required placeholder="e.g. Priya Shah">
+            <datalist id="groupOwnerOptions"></datalist>
+          </label>
+          <label>Membership type
+            <select name="dynamic" id="groupDynamic" required>
+              <option value="false">Assigned</option>
+              <option value="true">Dynamic</option>
+            </select>
+          </label>
+
+          <fieldset class="full-span access-fieldset">
+            <legend>Demo user memberships</legend>
+            <div class="checkbox-grid" id="groupMembers"></div>
+            <p class="field-help" id="groupMemberHelp">Assigned groups can be managed manually. Dynamic groups preserve rule-driven membership behavior.</p>
+          </fieldset>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="button ghost" data-close-group>Cancel</button>
+          <button type="submit" class="button primary" id="groupSaveButton">Create group</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-backdrop hidden" id="roleModal" role="dialog" aria-modal="true" aria-labelledby="roleModalTitle">
+    <div class="modal wide">
+      <div class="modal-header">
+        <div>
+          <p class="eyebrow">Azure authorization</p>
+          <h2 id="roleModalTitle">Create RBAC assignment</h2>
+        </div>
+        <button class="icon-button" data-close-role aria-label="Close">×</button>
+      </div>
+      <form id="roleForm">
+        <input type="hidden" name="index" id="roleIndex">
+        <div class="form-grid">
+          <label>Principal
+            <select name="principal" id="rolePrincipal" required></select>
+          </label>
+          <label>Role
+            <select name="role" id="roleName" required>
+              <option>Reader</option>
+              <option>Contributor</option>
+              <option>Owner</option>
+              <option>User Access Administrator</option>
+              <option>Security Reader</option>
+              <option>Security Administrator</option>
+              <option>User Administrator</option>
+              <option>Virtual Machine Contributor</option>
+              <option>Key Vault Secrets User</option>
+            </select>
+          </label>
+          <label>Scope
+            <input name="scope" id="roleScope" maxlength="140" required placeholder="e.g. rg-app-production">
+          </label>
+          <label>Assignment source
+            <select name="source" id="roleSource" required>
+              <option value="Direct">Direct</option>
+              <option value="Group">Group</option>
+              <option value="PIM">PIM</option>
+            </select>
+          </label>
+          <label>Classification
+            <select name="privileged" id="rolePrivileged" required>
+              <option value="false">Standard</option>
+              <option value="true">Privileged</option>
+            </select>
+          </label>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="button ghost" data-close-role>Cancel</button>
+          <button type="submit" class="button primary" id="roleSaveButton">Create assignment</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div class="toast-stack" id="toastStack" aria-live="polite"></div>
 
   <noscript>
