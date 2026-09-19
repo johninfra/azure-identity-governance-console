@@ -18,13 +18,58 @@ This project models workflows that appear in real identity governance and cloud-
 - Governance audit logging
 - Local export/import of application state
 
-The application is intentionally static and stores demo data locally in the browser using `localStorage`. No real tenant credentials, secrets, production identities, or Microsoft Graph data are included.
+The repository supports two distinct deployment contexts from the same codebase:
 
-## Why browser-local storage?
+- **Public GitHub version:** a portfolio/demo deployment that uses sample governance data and browser-local state.
+- **Azure enterprise version:** deployed to Azure Static Web Apps through GitHub Actions and protected by Microsoft Entra ID authentication against the configured Azure tenant.
 
-The goal of v1 is to produce a portable portfolio application that can run from both GitHub Pages and Azure Static Web Apps without requiring a backend.
+The current application data layer is still browser-local and uses `localStorage`. This means Azure-hosted data persists separately from the public GitHub deployment because the two deployments use different origins, but the current version does **not** yet provide organization-wide shared persistence across different users or browsers. No tenant secrets, passwords, production identities, or Microsoft Graph data are stored in the repository.
 
-The data layer is intentionally separated conceptually from the interface so a future production-oriented version can replace browser storage with:
+## Deployment architecture
+
+The project intentionally separates **source/deployment**, **authentication**, and **application data**.
+
+```text
+GitHub repository
+      │
+      ├── GitHub Pages
+      │     └── Public portfolio/demo version
+      │           └── Sample data + browser-local storage
+      │
+      └── GitHub Actions
+            └── Azure Static Web Apps deployment
+                  └── Microsoft Entra ID / OIDC authentication
+                        └── Tenant-authenticated Azure version
+                              └── Browser-local state for the current v1
+```
+
+### GitHub Actions → Azure deployment
+
+The repository contains an Azure Static Web Apps GitHub Actions workflow. On pushes to `main`, GitHub Actions deploys the application to the Azure Static Web App using the repository's Azure Static Web Apps deployment secret.
+
+The deployment workflow is the CI/CD path between GitHub and Azure. It should not be confused with end-user authentication: the workflow deploys the application, while Microsoft Entra ID authenticates users when they visit the Azure-hosted version.
+
+### Microsoft Entra ID authentication
+
+The Azure Static Web App is configured with a tenant-specific OpenID Connect provider in `staticwebapp.config.json`. Unauthenticated requests are redirected to the Entra sign-in flow, and the application routes require the `authenticated` role.
+
+This creates a company/tenant-facing version of the console that is separate from the public GitHub deployment. Tenant users and guests who are permitted to authenticate can access the Azure-hosted application.
+
+**Azure resource-group RBAC and application sign-in are separate controls.** Having access to the Azure resource group does not automatically grant application access, and application access does not automatically grant Azure management permissions.
+
+### Data persistence in the current version
+
+The v1 console persists state with browser `localStorage`.
+
+Because browser storage is scoped to the site's origin:
+
+- data entered in the **Azure Static Web App** stays associated with the Azure-hosted application;
+- data entered in the **public GitHub deployment** stays associated with the public deployment;
+- the two deployments therefore maintain separate browser-local datasets.
+
+However, this is **not yet shared organization-wide storage**. A second authorized user on another browser or device will not automatically see the first user's saved governance data.
+
+To support a true shared company dataset for all authorized members, the next architecture step is:
 
 ```text
 GitHub / CI-CD
@@ -33,12 +78,14 @@ Azure Static Web Apps
       ↓
 Microsoft Entra ID authentication
       ↓
-Azure Functions API
+Azure Functions / API
       ↓
 Cosmos DB / Azure SQL
       ↓
-Microsoft Graph
+Microsoft Graph (optional)
 ```
+
+That design would allow authenticated organization members to work against the same centrally stored governance dataset while keeping the public GitHub demo isolated.
 
 ## Core modules
 
@@ -73,17 +120,11 @@ Enable Pages for the repository and publish from the main branch/root directory.
 
 ## Azure deployment
 
-The same source can be imported into Azure Static Web Apps or another static-hosting workflow. This makes the project useful for demonstrating the path:
+The Azure version is already deployed through the repository's GitHub Actions workflow to Azure Static Web Apps.
 
-```text
-GitHub repository
-       ↓
-CI/CD deployment
-       ↓
-Azure-hosted application
-```
+The Azure-hosted application is protected with tenant-specific Microsoft Entra ID authentication through OpenID Connect. The public GitHub deployment remains the portfolio/demo version, while the Azure deployment represents the tenant-authenticated enterprise context.
 
-A future iteration can add Entra authentication, API endpoints, persistent cloud storage, and Microsoft Graph integrations.
+The current v1 still uses browser-local persistence. Shared multi-user organizational persistence would require the backend/API architecture described above.
 
 ## Azure Deployment Evidence
 
