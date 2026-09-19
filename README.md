@@ -85,6 +85,21 @@ Azure-hosted application
 
 A future iteration can add Entra authentication, API endpoints, persistent cloud storage, and Microsoft Graph integrations.
 
+## Azure Deployment Evidence
+
+This screenshot shows the Azure-hosted version of the project deployed inside my `rg-azure-enterprise-lab` resource group. It highlights the supporting Azure resources used around the application, including the Static Web App deployment and related lab resources.
+
+![Azure resource group deployment screenshot](docs/screenshots/azure-resource-group-deployment.jpg)
+
+### What this demonstrates
+
+- Azure resource group organization
+- Deployment of the Azure Identity Governance Console in Azure Static Web Apps
+- Visibility into supporting lab resources such as networking and monitoring components
+- Practical experience navigating Azure Resource Manager and validating deployed resources
+
+This supports the broader project goal of demonstrating identity governance concepts together with Azure deployment, access control, and cloud administration workflow familiarity.
+
 ## Security notes
 
 This is a simulation and portfolio project.
