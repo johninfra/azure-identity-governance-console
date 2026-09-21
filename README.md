@@ -167,18 +167,41 @@ The current v1 still uses browser-local persistence. Shared multi-user organizat
 
 ## Azure Deployment Evidence
 
-This screenshot shows the Azure-hosted version of the project deployed inside my `rg-azure-enterprise-lab` resource group. It highlights the supporting Azure resources used around the application, including the Static Web App deployment and related lab resources.
+This screenshot shows the Azure-hosted version of the **Azure Identity Governance Console** connected to my live Microsoft Entra tenant, **Tyler Technology Solutions**.
+
+The application authenticates through Microsoft Entra ID and uses **Microsoft Graph** and **Azure Resource Manager** to retrieve real tenant and Azure authorization data in read-only mode. The live Identity Directory shown here displays actual Entra users, UPNs, group memberships, registered authentication-method status, directory roles, account status, and Azure RBAC context.
+
+At the time of this screenshot, the application successfully synchronized:
+
+- 11 Microsoft Entra users
+- 16 Entra groups
+- Registered authentication-method data
+- Direct group memberships
+- Active Microsoft Entra directory roles
+- Azure RBAC assignments from the connected Azure subscription
+- Live tenant data through Microsoft Graph
+- Azure resource authorization data through Azure Resource Manager
+
+Recent user sign-in telemetry is intentionally marked as requiring **Microsoft Entra ID P1/P2**, rather than displaying simulated sign-in information.
 
 ![Azure Identity Governance Console](docs/screenshots/azure-identity-governance-console.png)
 
 ### What this demonstrates
 
-- Azure resource group organization
-- Deployment of the Azure Identity Governance Console in Azure Static Web Apps
-- Visibility into supporting lab resources such as networking and monitoring components
-- Practical experience navigating Azure Resource Manager and validating deployed resources
+- Integration of a custom web application with a live Microsoft Entra tenant
+- Microsoft Entra ID authentication using MSAL
+- Read-only Microsoft Graph API integration
+- Retrieval of real Entra users and user principal names
+- Live security-group and group-membership synchronization
+- Authentication-method visibility for tenant identities
+- Microsoft Entra directory-role discovery
+- Azure RBAC integration through Azure Resource Manager
+- Clear separation between live tenant data and simulated/demo functionality
+- Least-privilege, read-only cloud administration design
+- Practical IAM troubleshooting across authentication, authorization, groups, roles, and Azure scope
+- Deployment and operation of the application through Azure Static Web Apps
 
-This supports the broader project goal of demonstrating identity governance concepts together with Azure deployment, access control, and cloud administration workflow familiarity.
+This project demonstrates the relationship between **identity, authentication, authorization, group-based access, privileged roles, Microsoft Graph, and Azure RBAC** in a functioning Microsoft cloud environment rather than relying only on static sample data.
 
 ## Security notes
 
