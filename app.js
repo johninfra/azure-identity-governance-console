@@ -651,6 +651,7 @@ async function syncLiveTenantFromForm(e){
       pim:live.pim,
       risks:live.risks,
       audit:live.audit,
+      accessActivity:live.accessActivity||[],
       liveSyncedAt:live.syncedAt
     };
     liveTenantMode=true;
@@ -795,6 +796,35 @@ risks=function(){
     <div class="table-wrap section-gap"><table>
       <thead><tr><th>Severity</th><th>Finding</th><th>Entity</th><th>Source</th><th>Evidence</th><th>Status</th></tr></thead>
       <tbody>${rows||'<tr><td colspan="6" class="empty">No live identity-risk findings were generated from the current tenant data.</td></tr>'}</tbody>
+    </table></div>
+  </div>`;
+};
+
+const demoRequestsRenderer=requests;
+requests=function(){
+  if(!liveTenantMode)return demoRequestsRenderer();
+  const rows=filtered(state.accessActivity||[]).map(a=>`<tr>
+    <td class="name-cell"><strong>${esc(a.time)}</strong><span>${esc(a.correlationId||"")}</span></td>
+    <td class="name-cell"><strong>${esc(a.actor)}</strong><span>${esc(a.actorUpn||"")}</span></td>
+    <td>${badge(a.type,"blue")}</td>
+    <td><strong>${esc(a.activity)}</strong></td>
+    <td class="wrap-cell">${esc(a.target)}</td>
+    <td>${esc(a.targetType||"—")}</td>
+    <td>${statusBadge(a.result)}</td>
+  </tr>`).join("");
+  return `<div class="card card-pad">
+    <div class="toolbar">
+      <div>
+        <p class="eyebrow">Live access governance</p>
+        <h2 style="margin:4px 0">Access Activity</h2>
+        <div class="muted" style="font-size:12px">Real access-related Microsoft Entra directory audit events from this tenant. Group membership changes, directory-role events, app assignments/consent, entitlement events, and access-policy changes are shown when present.</div>
+      </div>
+      ${badge(`${(state.accessActivity||[]).length} live events`,(state.accessActivity||[]).length?"good":"neutral")}
+    </div>
+    <div class="callout">This is read-only audit evidence from the tenant. It is not a simulated approval queue and does not create, approve, or deny real access requests.</div>
+    <div class="table-wrap section-gap"><table>
+      <thead><tr><th>Time</th><th>Actor</th><th>Type</th><th>Activity</th><th>Target</th><th>Target type</th><th>Result</th></tr></thead>
+      <tbody>${rows||'<tr><td colspan="7" class="empty">No access-related directory audit events were returned in the current audit-log window.</td></tr>'}</tbody>
     </table></div>
   </div>`;
 };
