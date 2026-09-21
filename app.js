@@ -60,9 +60,15 @@ const seed={
  ]
 };
 let state=loadState();let currentView="dashboard";let searchTerm="";
+let liveTenantMode=false;
+let liveTenantMeta=null;
+let demoStateBackup=null;
 const el=id=>document.getElementById(id);
 function loadState(){try{const v=localStorage.getItem(STORAGE_KEY);return v?JSON.parse(v):structuredClone(seed)}catch{return structuredClone(seed)}}
-function save(){localStorage.setItem(STORAGE_KEY,JSON.stringify(state));updatePending()}
+function save(){
+  if(!liveTenantMode)localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
+  updatePending();
+}
 function user(id){return state.users.find(x=>x.id===id)||{name:"Unknown",upn:""}}
 function badge(text,type="neutral"){return `<span class="badge ${type}">${text}</span>`}
 function riskBadge(r){return badge(r,r==="High"?"bad":r==="Medium"?"warn":"good")}
@@ -586,6 +592,175 @@ window.openGroupEditor=openGroupEditor;
 window.deleteGroup=deleteGroup;
 window.openRoleEditor=openRoleEditor;
 window.deleteRoleAssignment=deleteRoleAssignment;
+
+
+
+/* ---------- Live Entra / Azure tenant mode ---------- */
+function liveConfig(){
+  return window.LiveEntra?.loadConfig?.()||{};
+}
+function updateTenantChrome(){
+  const tenantStrong=document.querySelector(".tenant-card strong");
+  const tenantSmall=document.querySelector(".tenant-card small");
+  const localBadge=document.querySelector(".local-badge");
+  if(tenantStrong)tenantStrong.textContent=liveTenantMode?"Tyler Technology Solutions":"Contoso Enterprise";
+  if(tenantSmall)tenantSmall.textContent=liveTenantMode?"Live Entra tenant · Read-only":"Production tenant · Demo";
+  if(localBadge){
+    localBadge.textContent=liveTenantMode?"Live Microsoft Graph data":"Browser-local data";
+    localBadge.classList.toggle("live-badge",liveTenantMode);
+  }
+  el("liveTenantButton")?.classList.toggle("hidden",liveTenantMode);
+  el("demoModeButton")?.classList.toggle("hidden",!liveTenantMode);
+  if(el("newRequestButton"))el("newRequestButton").disabled=liveTenantMode;
+}
+function openLiveTenantModal(){
+  if(!window.LiveEntra){toast("Live tenant connector failed to load","bad");return}
+  if(window.LiveEntra.isPublicDemoHost()){
+    toast("Live tenant sync is disabled on the public GitHub demo","bad");return;
+  }
+  const c=liveConfig();
+  el("liveClientId").value=c.clientId||"";
+  el("liveSubscriptionId").value=c.subscriptionId||"";
+  el("liveTenantModal").classList.remove("hidden");
+}
+function closeLiveTenantModal(){el("liveTenantModal").classList.add("hidden")}
+async function syncLiveTenantFromForm(e){
+  e.preventDefault();
+  const fd=new FormData(e.currentTarget);
+  const config={
+    clientId:String(fd.get("clientId")||"").trim(),
+    subscriptionId:String(fd.get("subscriptionId")||"").trim()
+  };
+  if(!window.LiveEntra.guid(config.clientId)){
+    toast("Enter a valid Application (client) ID","bad");return;
+  }
+  if(config.subscriptionId&&!window.LiveEntra.guid(config.subscriptionId)){
+    toast("Subscription ID must be a valid GUID","bad");return;
+  }
+  const btn=el("liveTenantSyncButton");
+  if(btn){btn.disabled=true;btn.textContent="Syncing…"}
+  try{
+    const live=await window.LiveEntra.sync(config);
+    if(!demoStateBackup)demoStateBackup=structuredClone(state);
+    const demo=demoStateBackup;
+    state={
+      ...structuredClone(demo),
+      users:live.users,
+      groups:live.groups,
+      roleAssignments:live.roleAssignments,
+      pim:live.pim,
+      audit:live.audit,
+      liveSyncedAt:live.syncedAt
+    };
+    liveTenantMode=true;
+    liveTenantMeta=live.meta||{};
+    closeLiveTenantModal();
+    currentView="dashboard";
+    searchTerm="";
+    if(el("globalSearch"))el("globalSearch").value="";
+    updateTenantChrome();
+    render();
+    toast(`Live tenant synced: ${live.users.length} users, ${live.groups.length} groups`);
+  }catch(err){
+    toast(window.LiveEntra.normalizeError(err),"bad");
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent="Sign in & sync"}
+  }
+}
+async function returnToDemoMode(){
+  if(demoStateBackup)state=structuredClone(demoStateBackup);
+  else state=loadState();
+  liveTenantMode=false;
+  liveTenantMeta=null;
+  currentView="dashboard";
+  searchTerm="";
+  updateTenantChrome();
+  render();
+  toast("Returned to browser-local demo data");
+}
+function liveModeBanner(){
+  if(!liveTenantMode)return "";
+  const meta=liveTenantMeta||{};
+  return `<div class="live-mode-banner">
+    <div><strong>Live Tenant Connected</strong><span>Read-only Microsoft Graph / Azure data · synced ${esc(state.liveSyncedAt?new Date(state.liveSyncedAt).toLocaleString():"now")}</span></div>
+    <div class="live-mode-flags">
+      ${badge(`${state.users.length} users`,"good")}
+      ${badge(`${state.groups.length} groups`,"blue")}
+      ${badge(meta.authMethodsReadable?"Auth methods readable":"Auth methods limited",meta.authMethodsReadable?"good":"warn")}
+      ${badge(meta.signInsAvailable?"Sign-ins available":"Sign-ins need P1/P2",meta.signInsAvailable?"good":"warn")}
+      ${badge(meta.azureRbacAvailable?"Azure RBAC synced":"Azure RBAC not synced",meta.azureRbacAvailable?"blue":"neutral")}
+    </div>
+  </div>`;
+}
+const originalRender=render;
+render=function(){
+  originalRender();
+  updateTenantChrome();
+  if(liveTenantMode&&el("content")){
+    el("content").insertAdjacentHTML("afterbegin",liveModeBanner());
+  }
+};
+
+/* Live-mode read-only renderers override the editable demo versions below. */
+const demoIdentitiesRenderer=identities;
+identities=function(){
+  if(!liveTenantMode)return demoIdentitiesRenderer();
+  const rows=filtered(state.users).map(u=>{
+    const roleText=(u.roles||[]).length?u.roles.join(", "):"None";
+    const groupText=identityGroupNames(u).length?identityGroupNames(u).join(", "):"None";
+    const mfaCell=u.mfaReadable?(u.mfa?badge("Registered","good"):badge("No strong method","warn")):badge("Unavailable","neutral");
+    return `<tr>
+      <td class="name-cell"><strong>${esc(u.name)}</strong><span>${esc(u.upn)}</span></td>
+      <td>${esc(u.dept)}</td><td>${esc(u.type)}</td><td>${mfaCell}</td>
+      <td class="wrap-cell">${esc(roleText)}</td><td class="wrap-cell">${esc(groupText)}</td>
+      <td>${esc(u.lastSignIn)}</td><td>${statusBadge(u.status)}</td>
+    </tr>`;
+  }).join("");
+  return tablePage("Live identity directory","Read-only workforce and guest identities synchronized from Microsoft Entra ID.",["Identity","Department","Type","MFA / strong auth","Roles","Groups","Recent sign-in","Status"],rows);
+};
+const demoGroupsRenderer=groups;
+groups=function(){
+  if(!liveTenantMode)return demoGroupsRenderer();
+  const rows=filtered(state.groups).map(g=>`<tr>
+    <td class="name-cell"><strong>${esc(g.name)}</strong><span>${esc(g.id)}</span></td>
+    <td>${esc(g.type)}</td><td>${g.members}</td><td class="wrap-cell">${esc(g.owner)}</td>
+    <td>${g.dynamic?badge("Dynamic","blue"):badge("Assigned","neutral")}</td>
+  </tr>`).join("");
+  return tablePage("Live groups & membership","Read-only Entra groups with direct user-member counts and owners.",["Group","Type","Direct users","Owner(s)","Membership"],rows);
+};
+const demoRolesRenderer=roles;
+roles=function(){
+  if(!liveTenantMode)return demoRolesRenderer();
+  const rows=filtered(state.roleAssignments).map(r=>`<tr>
+    <td class="name-cell"><strong>${esc(r.principal)}</strong><span>${esc(r.upn||r.principalType||"")}</span></td>
+    <td>${esc(r.role)}</td><td class="wrap-cell">${esc(r.scope)}</td>
+    <td>${badge(r.source,r.source==="Group"?"good":"warn")}</td>
+    <td>${r.privileged?badge("Privileged","purple"):badge("Standard","neutral")}</td>
+  </tr>`).join("");
+  return tablePage("Live Azure RBAC assignments","Read-only Azure role assignments synchronized from the configured subscription.",["Principal","Role","Scope","Source","Classification"],rows);
+};
+const demoPrivilegedRenderer=privileged;
+privileged=function(){
+  if(!liveTenantMode)return demoPrivilegedRenderer();
+  const rows=filtered(state.pim).map(p=>`<tr>
+    <td>${esc(p.user)}</td><td>${esc(p.role)}</td><td class="wrap-cell">${esc(p.scope)}</td>
+    <td>${pimStateBadge(p.state)}</td><td>${esc(p.expires)}</td>
+  </tr>`).join("");
+  return tablePage("Live privileged directory access","Active Entra role assignments are shown on all tenants; eligible/PIM schedule data appears when licensing and permissions expose it.",["Identity","Role","Scope","State","Expiration"],rows);
+};
+audit=function(){
+  const rows=filtered(state.audit).map(a=>`<tr><td>${esc(a.time)}</td><td>${esc(a.actor)}</td><td><strong>${esc(a.action)}</strong></td><td class="wrap-cell">${esc(a.target)}</td><td>${statusBadge(a.result)}</td></tr>`).join("");
+  return tablePage(liveTenantMode?"Live directory audit":"Audit log",liveTenantMode?"Recent read-only Microsoft Entra directory audit activity.":"Immutable-style local event history for governance actions in this demo.",["Time","Actor","Activity","Target","Result"],rows);
+};
+
+el("liveTenantButton")?.addEventListener("click",openLiveTenantModal);
+el("demoModeButton")?.addEventListener("click",returnToDemoMode);
+el("liveTenantForm")?.addEventListener("submit",syncLiveTenantFromForm);
+document.querySelectorAll("[data-close-live]").forEach(b=>b.addEventListener("click",closeLiveTenantModal));
+el("liveTenantModal")?.addEventListener("click",e=>{if(e.target===el("liveTenantModal"))closeLiveTenantModal()});
+window.openLiveTenantModal=openLiveTenantModal;
+window.returnToDemoMode=returnToDemoMode;
+updateTenantChrome();
 
 
 /* ---------- Editable privileged access and identity risk management ---------- */
