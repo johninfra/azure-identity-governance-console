@@ -497,15 +497,95 @@
     const audit = audits.map(x => {
       const actorUser = x?.initiatedBy?.user;
       const actorApp = x?.initiatedBy?.app;
-      const target = (x?.targetResources || []).map(t => t.userPrincipalName || t.displayName || t.id).filter(Boolean).join(", ");
+      const targetResources = x?.targetResources || [];
+      const target = targetResources.map(t => t.userPrincipalName || t.displayName || t.id).filter(Boolean).join(", ");
       return {
         time: formatDate(x.activityDateTime),
         actor: actorUser?.displayName || actorUser?.userPrincipalName || actorApp?.displayName || "System / service",
+        actorUpn: actorUser?.userPrincipalName || "",
         action: x.activityDisplayName || "Directory activity",
+        category: x.category || "DirectoryManagement",
         target: target || "—",
-        result: String(x.result || "Unknown").toLowerCase() === "success" ? "Success" : (x.result || "Unknown")
+        targetTypes: [...new Set(targetResources.map(t => t.type).filter(Boolean))].join(", "),
+        result: String(x.result || "Unknown").toLowerCase() === "success" ? "Success" : (x.result || "Unknown"),
+        correlationId: x.correlationId || ""
       };
     });
+
+    function classifyAccessActivity(x) {
+      const action = String(x.activityDisplayName || "").toLowerCase();
+      const category = String(x.category || "").toLowerCase();
+
+      if ((action.includes("member") && action.includes("group")) ||
+          action.includes("add member to group") ||
+          action.includes("remove member from group")) {
+        return "Group membership";
+      }
+
+      if ((action.includes("owner") && action.includes("group")) ||
+          action.includes("add owner to group") ||
+          action.includes("remove owner from group")) {
+        return "Group ownership";
+      }
+
+      if (category.includes("rolemanagement") ||
+          action.includes("role assignment") ||
+          action.includes("member to role") ||
+          action.includes("member from role") ||
+          action.includes("eligible role") ||
+          action.includes("activate eligible role")) {
+        return "Directory role";
+      }
+
+      if (action.includes("app role assignment") ||
+          action.includes("application assignment") ||
+          action.includes("service principal assignment") ||
+          action.includes("delegated permission grant") ||
+          action.includes("oauth2permissiongrant") ||
+          action.includes("consent to application") ||
+          action.includes("consent to app")) {
+        return "Application access";
+      }
+
+      if (category.includes("entitlement") ||
+          action.includes("access package") ||
+          action.includes("entitlement")) {
+        return "Entitlement";
+      }
+
+      if (action.includes("conditional access") ||
+          (category.includes("policy") && (action.includes("policy") || action.includes("named location")))) {
+        return "Access policy";
+      }
+
+      return null;
+    }
+
+    const accessActivity = audits.map(x => {
+      const type = classifyAccessActivity(x);
+      if (!type) return null;
+
+      const actorUser = x?.initiatedBy?.user;
+      const actorApp = x?.initiatedBy?.app;
+      const targetResources = x?.targetResources || [];
+      const targets = targetResources.map(t => ({
+        name: t.userPrincipalName || t.displayName || t.id || "Unknown target",
+        type: t.type || ""
+      }));
+
+      return {
+        id: x.id || x.correlationId || crypto.randomUUID(),
+        time: formatDate(x.activityDateTime),
+        actor: actorUser?.displayName || actorUser?.userPrincipalName || actorApp?.displayName || "System / service",
+        actorUpn: actorUser?.userPrincipalName || "",
+        activity: x.activityDisplayName || "Access-related directory activity",
+        type,
+        target: targets.map(t => t.name).join(", ") || "—",
+        targetType: [...new Set(targets.map(t => t.type).filter(Boolean))].join(", ") || "—",
+        result: String(x.result || "Unknown").toLowerCase() === "success" ? "Success" : (x.result || "Unknown"),
+        correlationId: x.correlationId || ""
+      };
+    }).filter(Boolean);
 
     return {
       account: account ? { name: account.name || account.username, username: account.username } : null,
@@ -516,6 +596,7 @@
       pim: livePim,
       risks,
       audit,
+      accessActivity,
       meta: {
         signInsAvailable: signIns.length > 0,
         authMethodsReadable: Object.values(authMethods).some(Array.isArray),
@@ -524,6 +605,7 @@
         riskyUsersAvailable,
         liveGovernanceRiskCount: risks.filter(r => r.source === "Live governance finding").length,
         identityProtectionRiskCount: risks.filter(r => r.source === "Entra ID Protection").length,
+        accessActivityCount: accessActivity.length,
         users: users.length,
         groups: groups.length
       }
