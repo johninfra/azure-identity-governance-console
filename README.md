@@ -126,7 +126,19 @@ Microsoft Graph (optional)
 
 That design would allow authenticated organization members to work against the same centrally stored governance dataset while keeping the public GitHub demo isolated.
 
-## Core modules
+
+## Governance Intelligence layer
+
+The console also includes a read-only analysis layer that correlates the live Entra and Azure data already synchronized by the application:
+
+- **Dynamic Governance Score** — calculates a 0–100 posture score from observable MFA coverage, privileged-access patterns, lifecycle hygiene, group ownership, and open governance findings. The score is an application heuristic, not Microsoft Secure Score.
+- **Tenant Drift Detection** — stores a local snapshot of the previous live sync and reports identity additions/removals, account-state changes, MFA changes, group-membership drift, role grants/revocations, and Azure RBAC changes on the next sync.
+- **Identity 360** — opens a correlated identity view with account status, authentication posture, direct groups, effective authorization paths, governance findings, and related audit activity.
+- **Privilege Exposure Analyzer** — correlates direct Azure RBAC, group-derived Azure RBAC, Entra directory roles, and PIM to identify identities with the broadest observed privileged access.
+- **Access Path Explorer** — renders effective authorization relationships such as `User → Group → Reader → Resource Group`, while keeping direct, group-derived, directory-role, and PIM sources distinct.
+
+All five features are client-side/read-only and do not require additional Azure configuration beyond the data sources already used by Live Tenant mode.
+\n## Core modules
 
 | Module | Enterprise concept |
 | --- | --- |
