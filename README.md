@@ -49,7 +49,46 @@ The repository contains an Azure Static Web Apps GitHub Actions workflow. On pus
 
 The deployment workflow is the CI/CD path between GitHub and Azure. It should not be confused with end-user authentication: the workflow deploys the application, while Microsoft Entra ID authenticates users when they visit the Azure-hosted version.
 
-### Microsoft Entra ID authentication
+### Live Tenant mode
+
+The Azure-hosted console now supports an optional **Live Tenant** mode. The public GitHub Pages version remains a sample-data demo, while the tenant-authenticated Azure Static Web App can request read-only Microsoft Graph and Azure Resource Manager data.
+
+Live Tenant mode can synchronize:
+
+- Microsoft Entra users and UPNs
+- account enabled/disabled state
+- department where populated
+- security and Microsoft 365 groups
+- direct user membership counts
+- group owners
+- per-user registered authentication methods when permitted
+- active Entra directory role assignments
+- PIM active/eligible role schedule data when licensing exposes it
+- recent directory audit activity
+- recent sign-in information when Entra P1/P2 exposes Graph sign-in telemetry
+- Azure RBAC assignments when a Subscription ID is configured
+
+Live mode is intentionally **read-only**. Create/edit/delete controls remain part of the browser-local demo model and are not used to modify the real tenant.
+
+### Live Tenant app registration requirements
+
+Use a Microsoft Entra app registration configured as a **Single-page application (SPA)** and add the Azure Static Web App origin as a redirect URI.
+
+Delegated Microsoft Graph permissions:
+
+- `User.Read`
+- `Directory.Read.All`
+- `RoleManagement.Read.Directory`
+- `AuditLog.Read.All`
+- `UserAuthenticationMethod.Read.All`
+
+For Azure RBAC inventory, also add Azure Service Management delegated:
+
+- `https://management.azure.com/user_impersonation`
+
+Grant tenant admin consent where required. The application does not store a client secret in browser code. The Tenant ID is the lab tenant and the Application/Client ID plus optional Subscription ID are stored locally as non-secret identifiers.
+
+## Microsoft Entra ID authentication
 
 The Azure Static Web App is configured with a tenant-specific OpenID Connect provider in `staticwebapp.config.json`. Unauthenticated requests are redirected to the Entra sign-in flow, and the application routes require the `authenticated` role.
 
