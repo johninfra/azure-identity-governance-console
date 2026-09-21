@@ -50,3 +50,42 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.app-shell{displ
 #liveTenantButton:hover{background:#123b2d}
 #demoModeButton{border-color:#36506a}
 button:disabled{opacity:.55;cursor:not-allowed}
+
+
+/* Governance Intelligence */
+.intel-score-breakdown{display:grid;gap:10px;margin-top:16px}
+.intel-score-row{display:grid;grid-template-columns:minmax(150px,1fr) auto;gap:5px 12px;align-items:center}
+.intel-score-row>div:first-child{display:flex;flex-direction:column;gap:2px}
+.intel-score-row span{font-size:11px;color:var(--muted)}
+.intel-score-value{font-weight:700;font-size:12px}
+.intel-meter{grid-column:1/-1;height:5px;border-radius:999px;background:rgba(148,163,184,.14);overflow:hidden}
+.intel-meter span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#38bdf8,#22c55e)}
+.drift-list,.path-list{display:grid;gap:8px;margin-top:14px}
+.drift-item,.path-row{display:flex;justify-content:space-between;gap:14px;align-items:center;padding:11px 12px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,.015)}
+.drift-item>div:first-child{display:flex;flex-direction:column;gap:3px}
+.drift-item span{font-size:11px;color:var(--muted)}
+.intel-footnote{font-size:11px;margin-top:10px}
+.identity-link{appearance:none;border:0;background:none;padding:0;color:inherit;text-align:left;cursor:pointer;font:inherit;display:flex;flex-direction:column;gap:2px}
+.identity-link strong{color:var(--text)}
+.identity-link span{font-size:11px;color:var(--muted)}
+.identity-link:hover strong{text-decoration:underline;text-underline-offset:3px}
+.identity-link.compact{display:inline-flex}
+.intel-inline-note{font-size:10px;margin-top:5px}
+.intel-modal{width:min(1100px,94vw);max-height:90vh;overflow:auto}
+.identity360-metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+.intel-modal-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.intel-panel{border:1px solid var(--border);background:rgba(255,255,255,.015);border-radius:12px;padding:14px}
+.intel-panel h3{margin:3px 0 0}
+.intel-dl{display:grid;grid-template-columns:120px 1fr;gap:8px 12px;margin:10px 0 0}
+.intel-dl dt{color:var(--muted);font-size:11px}
+.intel-dl dd{margin:0;font-size:12px}
+.chip-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.path-chain{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.path-node{display:inline-flex;align-items:center;padding:4px 7px;border-radius:7px;border:1px solid var(--border);background:rgba(56,189,248,.06);font-size:11px;line-height:1.2}
+.path-arrow{color:var(--muted);font-size:11px}
+.path-row>div:first-child{min-width:0}
+@media(max-width:900px){
+  .identity360-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .intel-modal-grid{grid-template-columns:1fr}
+  .drift-item,.path-row{align-items:flex-start;flex-direction:column}
+}
