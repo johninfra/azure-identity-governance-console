@@ -829,6 +829,151 @@ requests=function(){
   </div>`;
 };
 
+
+const demoReviewsRenderer=reviews;
+reviews=function(){
+  if(!liveTenantMode)return demoReviewsRenderer();
+
+  const candidates=[];
+  let i=1;
+  const add=(priority,category,entity,reason,evidence,reviewer)=>{
+    candidates.push({
+      id:`RC-${String(i++).padStart(3,"0")}`,
+      priority,category,entity,reason,evidence,reviewer
+    });
+  };
+
+  for(const p of state.pim||[]){
+    if(!p.user||!p.role)continue;
+    const high=/global administrator|privileged role administrator|security administrator|authentication administrator/i.test(p.role);
+    add(
+      high?"High":"Medium",
+      "Privileged directory access",
+      p.user,
+      `${p.role} is ${String(p.state||"assigned").toLowerCase()} at ${p.scope||"tenant scope"}. Confirm the role is still required and that standing privilege is justified.`,
+      `${p.role} · ${p.state||"Assigned"} · ${p.expires||"No expiration exposed"}`,
+      "Identity / Security Governance"
+    );
+  }
+
+  for(const r of state.roleAssignments||[]){
+    if(!r.privileged)continue;
+    add(
+      r.source==="Direct"?"High":"Medium",
+      r.source==="Direct"?"Direct Azure RBAC assignment":"Privileged Azure RBAC",
+      r.principal,
+      r.source==="Direct"
+        ? `${r.role} is assigned directly at ${r.scope}. Validate business need and whether group-based authorization would be preferable.`
+        : `${r.role} is assigned through a group at ${r.scope}. Recertify the group membership and assignment scope.`,
+      `${r.role} · ${r.scope} · ${r.source}`,
+      "Azure resource owner"
+    );
+  }
+
+  for(const u of state.users||[]){
+    const groups=(u.groups||[]).length;
+    const roles=(u.roles||[]).length;
+
+    if(String(u.type||"").toLowerCase()==="guest" && (groups||roles)){
+      add(
+        roles?"High":"Medium",
+        "Guest / external access",
+        u.name,
+        `External identity retains ${groups} direct group membership(s) and ${roles} role(s). Confirm sponsorship, continuing business need, and expiration.`,
+        u.upn||u.id,
+        "Guest sponsor / Application owner"
+      );
+    }
+
+    if(u.status==="Disabled" && (groups||roles)){
+      add(
+        "High",
+        "Disabled identity residual access",
+        u.name,
+        `Disabled identity still has ${groups} direct group membership(s) and ${roles} role(s). Review for complete deprovisioning.`,
+        u.upn||u.id,
+        "Identity Operations"
+      );
+    }
+
+    if(u.status==="Active" && u.mfaReadable && !u.mfa){
+      const privileged=(u.roles||[]).some(r=>/administrator|owner|contributor|privileged/i.test(r));
+      add(
+        privileged?"High":"Medium",
+        privileged?"Privileged identity authentication review":"Authentication-method review",
+        u.name,
+        privileged
+          ?"Privileged active identity has no strong authentication method returned by Microsoft Graph."
+          :"Active identity has no strong authentication method returned by Microsoft Graph.",
+        u.upn||u.id,
+        "Identity / Security Governance"
+      );
+    }
+  }
+
+  for(const g of state.groups||[]){
+    if(!g.owner||/no owner returned/i.test(g.owner)){
+      add(
+        "Low",
+        "Group ownership review",
+        g.name,
+        "No group owner was returned by Microsoft Graph. Assigning a responsible owner improves recertification and accountability.",
+        `${g.members||0} direct user member(s) · ${g.type||"Group"}`,
+        "Identity Governance"
+      );
+    }
+
+    const privilegedAssignment=(state.roleAssignments||[]).find(r=>r.principal===g.name&&r.privileged);
+    if(privilegedAssignment){
+      add(
+        "High",
+        "Privileged group membership review",
+        g.name,
+        `This group carries ${privilegedAssignment.role} at ${privilegedAssignment.scope}. Review every member because group membership confers privileged Azure access.`,
+        `${g.members||0} direct user member(s) · Owner(s): ${g.owner||"None"}`,
+        "Azure resource owner / Group owner"
+      );
+    }
+  }
+
+  const order={High:0,Medium:1,Low:2};
+  candidates.sort((a,b)=>(order[a.priority]??9)-(order[b.priority]??9)||a.category.localeCompare(b.category)||a.entity.localeCompare(b.entity));
+  const visible=filtered(candidates);
+  const high=candidates.filter(x=>x.priority==="High").length;
+  const medium=candidates.filter(x=>x.priority==="Medium").length;
+  const low=candidates.filter(x=>x.priority==="Low").length;
+
+  const rows=visible.map(c=>`<tr>
+    <td>${riskBadge(c.priority)}</td>
+    <td>${badge(c.category,"blue")}</td>
+    <td class="name-cell"><strong>${esc(c.entity)}</strong><span>${esc(c.id)}</span></td>
+    <td class="wrap-cell">${esc(c.reason)}</td>
+    <td class="wrap-cell">${esc(c.evidence)}</td>
+    <td>${esc(c.reviewer)}</td>
+  </tr>`).join("");
+
+  return `<div class="card card-pad">
+    <div class="toolbar">
+      <div>
+        <p class="eyebrow">Live recertification candidates</p>
+        <h2 style="margin:4px 0">Access Reviews</h2>
+        <div class="muted" style="font-size:12px">Read-only review candidates derived from your live Entra identities, groups, authentication posture, privileged directory roles, and Azure RBAC assignments.</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${badge(`${candidates.length} candidates`,candidates.length?"blue":"good")}
+        ${badge(`${high} high`,high?"bad":"good")}
+        ${badge(`${medium} medium`,medium?"warn":"neutral")}
+        ${badge(`${low} low`,"neutral")}
+      </div>
+    </div>
+    <div class="callout">These are governance review candidates generated from current tenant state — not Microsoft Entra Access Review objects. No approval, denial, or access removal is performed from this page.</div>
+    <div class="table-wrap section-gap"><table>
+      <thead><tr><th>Priority</th><th>Review type</th><th>Entity</th><th>Why review</th><th>Evidence</th><th>Suggested reviewer</th></tr></thead>
+      <tbody>${rows||'<tr><td colspan="6" class="empty">No review candidates match the current filter.</td></tr>'}</tbody>
+    </table></div>
+  </div>`;
+};
+
 /* ---------- Editable privileged access and identity risk management ---------- */
 function nextPimId(){
   const max=state.pim.reduce((m,p)=>Math.max(m,Number(String(p.id).replace(/\D/g,""))||0),0);
