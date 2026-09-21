@@ -150,7 +150,7 @@
         paged(`${GRAPH}/groups?$select=id,displayName,securityEnabled,mailEnabled,groupTypes,membershipRule,membershipRuleProcessingState&$top=999`, graphToken),
         paged(`${GRAPH}/servicePrincipals?$select=id,displayName,appId,servicePrincipalType&$top=999`, graphToken),
         paged(`${GRAPH}/roleManagement/directory/roleDefinitions`, graphToken),
-        paged(`${GRAPH}/roleManagement/directory/roleAssignments?$select=id,principalId,roleDefinitionId,directoryScopeId,appScopeId`, graphToken)
+        paged(`${GRAPH}/roleManagement/directory/roleAssignments`, graphToken)
       ]);
 
     const groupDetails = await mapLimit(groupsRaw, 5, async g => {
@@ -196,7 +196,8 @@
     let azureRoleAssignments = [];
     let azureRoleDefinitions = [];
     const subscriptionId = String(config.subscriptionId || "").trim();
-    if (guid(subscriptionId)) {
+    const usableSubscriptionId = guid(subscriptionId) && subscriptionId.toLowerCase() !== TENANT_ID.toLowerCase();
+    if (usableSubscriptionId) {
       try {
         const armToken = await acquire(ARM_SCOPES, config);
         [azureRoleAssignments, azureRoleDefinitions] = await Promise.all([
