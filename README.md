@@ -169,7 +169,7 @@ The current v1 still uses browser-local persistence. Shared multi-user organizat
 
 This screenshot shows the Azure-hosted version of the project deployed inside my `rg-azure-enterprise-lab` resource group. It highlights the supporting Azure resources used around the application, including the Static Web App deployment and related lab resources.
 
-![Azure resource group deployment screenshot](docs/screenshots/azure-resource-group-deployment.jpg)
+![Azure resource group deployment screenshot](docs/screenshots/azure-identity-governance-console.jpg)
 
 ### What this demonstrates
 
