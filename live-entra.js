@@ -149,8 +149,8 @@
         paged(`${GRAPH}/users?$select=id,displayName,userPrincipalName,userType,accountEnabled,department&$top=999`, graphToken),
         paged(`${GRAPH}/groups?$select=id,displayName,securityEnabled,mailEnabled,groupTypes,membershipRule,membershipRuleProcessingState&$top=999`, graphToken),
         paged(`${GRAPH}/servicePrincipals?$select=id,displayName,appId,servicePrincipalType&$top=999`, graphToken),
-        paged(`${GRAPH}/roleManagement/directory/roleDefinitions?$select=id,displayName,isBuiltIn&$top=999`, graphToken),
-        paged(`${GRAPH}/roleManagement/directory/roleAssignments?$select=id,principalId,roleDefinitionId,directoryScopeId,appScopeId&$top=999`, graphToken)
+        paged(`${GRAPH}/roleManagement/directory/roleDefinitions`, graphToken),
+        paged(`${GRAPH}/roleManagement/directory/roleAssignments?$select=id,principalId,roleDefinitionId,directoryScopeId,appScopeId`, graphToken)
       ]);
 
     const groupDetails = await mapLimit(groupsRaw, 5, async g => {
