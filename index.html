@@ -58,6 +58,8 @@
             <span>⌕</span>
             <input id="globalSearch" type="search" placeholder="Search current view" aria-label="Search current view">
           </label>
+          <button class="button secondary" id="liveTenantButton">Connect Live Tenant</button>
+          <button class="button ghost hidden" id="demoModeButton">Return to Demo</button>
           <button class="button secondary" id="newRequestButton">+ New access request</button>
           <div class="operator">
             <div class="avatar">JT</div>
@@ -410,11 +412,42 @@
     </div>
   </div>
 
+  <div class="modal-backdrop hidden" id="liveTenantModal" role="dialog" aria-modal="true" aria-labelledby="liveTenantModalTitle">
+    <div class="modal">
+      <div class="modal-header">
+        <div>
+          <p class="eyebrow">Read-only Microsoft Graph</p>
+          <h2 id="liveTenantModalTitle">Connect live Entra tenant</h2>
+        </div>
+        <button class="icon-button" data-close-live aria-label="Close">×</button>
+      </div>
+      <form id="liveTenantForm">
+        <div class="form-grid">
+          <label class="full-span">Application (client) ID
+            <input name="clientId" id="liveClientId" required placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+          </label>
+          <label class="full-span">Azure Subscription ID <span class="muted">(optional — enables Azure RBAC)</span>
+            <input name="subscriptionId" id="liveSubscriptionId" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+          </label>
+        </div>
+        <div class="callout section-gap">
+          Tenant ID is locked to this lab tenant. Live mode is read-only and uses delegated Microsoft Graph permissions. No client secret is stored in this browser app.
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="button ghost" data-close-live>Cancel</button>
+          <button type="submit" class="button primary" id="liveTenantSyncButton">Sign in & sync</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div class="toast-stack" id="toastStack" aria-live="polite"></div>
 
   <noscript>
     <div class="noscript">JavaScript is required to use this governance console.</div>
   </noscript>
+  <script src="https://alcdn.msauth.net/browser/2.35.0/js/msal-browser.min.js"></script>
+  <script src="live-entra.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
