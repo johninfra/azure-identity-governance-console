@@ -137,6 +137,150 @@
     }
   }
 
+  async function acquireOptionalSilent(scopes, config) {
+    try {
+      const instance = await ensureMsal(config);
+      if (!account) return null;
+      return (await instance.acquireTokenSilent({ scopes, account })).accessToken;
+    } catch {
+      return null;
+    }
+  }
+
+
+  function severityFromRiskLevel(level) {
+    const v = String(level || "").toLowerCase();
+    if (v === "high") return "High";
+    if (v === "medium") return "Medium";
+    if (v === "low") return "Low";
+    return "Medium";
+  }
+
+  function buildLiveRisks({ users, groups, roleAssignments, pim, riskyUsers, riskDetections }) {
+    const findings = [];
+    let n = 1;
+    const add = (severity, title, entity, detail, source, evidence = "") => {
+      findings.push({
+        id: `LIVE-${String(n++).padStart(3,"0")}`,
+        severity,
+        title,
+        entity,
+        detail,
+        source,
+        evidence,
+        status: "Open"
+      });
+    };
+
+    for (const u of users) {
+      if (u.status === "Active" && u.mfaReadable && !u.mfa) {
+        const privileged = (u.roles || []).some(r => /global administrator|privileged|security administrator|authentication administrator|user administrator|owner|contributor|user access administrator/i.test(r));
+        add(
+          privileged ? "High" : "Medium",
+          privileged ? "Privileged account without strong authentication" : "Strong authentication not registered",
+          u.name,
+          privileged
+            ? "This active identity has privileged access but no strong authentication method was returned by Microsoft Graph."
+            : "This active identity has no strong authentication method returned by Microsoft Graph.",
+          "Live governance finding",
+          u.upn || u.id
+        );
+      }
+
+      if (u.status === "Disabled" && ((u.roles || []).length || (u.groups || []).length)) {
+        add(
+          "Medium",
+          "Disabled identity retains access relationships",
+          u.name,
+          `The account is disabled but still has ${(u.roles||[]).length} role(s) and ${(u.groups||[]).length} direct group membership(s). Review whether residual access should be removed.`,
+          "Live governance finding",
+          u.upn || u.id
+        );
+      }
+
+      if (String(u.type).toLowerCase() === "guest" && (u.roles || []).length) {
+        add(
+          "High",
+          "Guest identity has assigned role access",
+          u.name,
+          `Guest identity currently has role access: ${(u.roles||[]).join(", ")}.`,
+          "Live governance finding",
+          u.upn || u.id
+        );
+      }
+    }
+
+    for (const p of pim || []) {
+      if (p.state !== "Active") continue;
+      const high = /global administrator|privileged role administrator|security administrator|authentication administrator/i.test(p.role || "");
+      add(
+        high ? "High" : "Medium",
+        "Standing privileged directory role",
+        p.user,
+        `${p.role} is currently active at ${p.scope || "tenant scope"}. Review whether permanent standing privilege is required.`,
+        "Live governance finding",
+        p.role
+      );
+    }
+
+    for (const r of roleAssignments || []) {
+      if (!r.privileged) continue;
+      const direct = r.source === "Direct";
+      add(
+        direct ? "High" : "Medium",
+        direct ? "Direct privileged Azure RBAC assignment" : "Privileged Azure RBAC assignment",
+        r.principal,
+        `${r.role} is assigned at ${r.scope}. ${direct ? "Direct user/service-principal assignment should be reviewed against group-based least privilege." : "Review scope and continuing business need."}`,
+        "Live governance finding",
+        r.upn || r.principalType || ""
+      );
+    }
+
+    for (const g of groups || []) {
+      if (!g.owner || /no owner returned/i.test(g.owner)) {
+        add(
+          "Low",
+          "Group has no returned owner",
+          g.name,
+          "Microsoft Graph did not return an owner for this group. Ownerless groups can make access recertification and accountability harder.",
+          "Live governance finding",
+          g.id
+        );
+      }
+    }
+
+    for (const ru of riskyUsers || []) {
+      const user = users.find(u => u.id === ru.id || u.id === ru.userId);
+      add(
+        severityFromRiskLevel(ru.riskLevel),
+        "Microsoft Entra risky user",
+        user?.name || ru.userDisplayName || ru.userPrincipalName || ru.id || "Unknown identity",
+        `Entra ID Protection reports user risk level ${ru.riskLevel || "unknown"} with state ${ru.riskState || "unknown"}.`,
+        "Entra ID Protection",
+        user?.upn || ru.userPrincipalName || ru.id || ""
+      );
+    }
+
+    for (const rd of riskDetections || []) {
+      add(
+        severityFromRiskLevel(rd.riskLevel),
+        rd.riskEventType ? `Risk detection: ${rd.riskEventType}` : "Microsoft Entra risk detection",
+        rd.userDisplayName || rd.userPrincipalName || rd.userId || "Unknown identity",
+        `${rd.activity || "Identity activity"} detected ${rd.detectedDateTime ? "at " + formatDate(rd.detectedDateTime) : ""}. Risk state: ${rd.riskState || "unknown"}.`,
+        "Entra ID Protection",
+        rd.userPrincipalName || rd.ipAddress || rd.id || ""
+      );
+    }
+
+    const seen = new Set();
+    return findings.filter(f => {
+      const key = [f.source,f.title,f.entity,f.detail].join("|").toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+
   async function sync(config) {
     if (isPublicDemoHost()) throw new Error("Live tenant sync is disabled on the public GitHub Pages demo.");
     if (!guid(config.clientId)) throw new Error("Enter the Entra Application (client) ID first.");
@@ -192,6 +336,27 @@
         paged(`${GRAPH}/roleManagement/directory/roleEligibilityScheduleInstances?$select=id,principalId,roleDefinitionId,directoryScopeId,appScopeId,startDateTime,endDateTime,memberType&$top=999`, graphToken)
       ]);
     } catch {}
+
+    let riskDetections = [];
+    let riskyUsers = [];
+    let riskDetectionsAvailable = false;
+    let riskyUsersAvailable = false;
+
+    const riskEventToken = await acquireOptionalSilent(["IdentityRiskEvent.Read.All"], config);
+    if (riskEventToken) {
+      try {
+        riskDetections = await paged(`${GRAPH}/identityProtection/riskDetections?$top=100`, riskEventToken, 100);
+        riskDetectionsAvailable = true;
+      } catch {}
+    }
+
+    const riskyUserToken = await acquireOptionalSilent(["IdentityRiskyUser.Read.All"], config);
+    if (riskyUserToken) {
+      try {
+        riskyUsers = await paged(`${GRAPH}/identityProtection/riskyUsers?$top=100`, riskyUserToken, 100);
+        riskyUsersAvailable = true;
+      } catch {}
+    }
 
     let azureRoleAssignments = [];
     let azureRoleDefinitions = [];
@@ -319,6 +484,16 @@
       };
     });
 
+    const livePim = [...activeDirectoryAssignments, ...eligibleDirectoryAssignments];
+    const risks = buildLiveRisks({
+      users,
+      groups,
+      roleAssignments,
+      pim: livePim,
+      riskyUsers,
+      riskDetections
+    });
+
     const audit = audits.map(x => {
       const actorUser = x?.initiatedBy?.user;
       const actorApp = x?.initiatedBy?.app;
@@ -338,12 +513,17 @@
       users,
       groups,
       roleAssignments,
-      pim: [...activeDirectoryAssignments, ...eligibleDirectoryAssignments],
+      pim: livePim,
+      risks,
       audit,
       meta: {
         signInsAvailable: signIns.length > 0,
         authMethodsReadable: Object.values(authMethods).some(Array.isArray),
         azureRbacAvailable: azureRoleAssignments.length > 0,
+        riskDetectionsAvailable,
+        riskyUsersAvailable,
+        liveGovernanceRiskCount: risks.filter(r => r.source === "Live governance finding").length,
+        identityProtectionRiskCount: risks.filter(r => r.source === "Entra ID Protection").length,
         users: users.length,
         groups: groups.length
       }
