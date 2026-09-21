@@ -649,6 +649,7 @@ async function syncLiveTenantFromForm(e){
       groups:live.groups,
       roleAssignments:live.roleAssignments,
       pim:live.pim,
+      risks:live.risks,
       audit:live.audit,
       liveSyncedAt:live.syncedAt
     };
@@ -762,6 +763,41 @@ window.openLiveTenantModal=openLiveTenantModal;
 window.returnToDemoMode=returnToDemoMode;
 updateTenantChrome();
 
+
+const demoRisksRenderer=risks;
+risks=function(){
+  if(!liveTenantMode)return demoRisksRenderer();
+  const rows=filtered(state.risks||[]).map(r=>`<tr>
+    <td>${riskBadge(r.severity)}</td>
+    <td class="name-cell"><strong>${esc(r.title)}</strong><span>${esc(r.detail)}</span></td>
+    <td>${esc(r.entity)}</td>
+    <td>${badge(r.source||"Live governance finding",r.source==="Entra ID Protection"?"purple":"blue")}</td>
+    <td class="wrap-cell">${esc(r.evidence||"—")}</td>
+    <td>${riskStatusBadge(r.status||"Open")}</td>
+  </tr>`).join("");
+  const meta=liveTenantMeta||{};
+  const idpText=(meta.riskyUsersAvailable||meta.riskDetectionsAvailable)
+    ?"Microsoft Entra ID Protection telemetry is included where the licensed APIs returned data."
+    :"Microsoft Entra ID Protection telemetry is not available with the current licensing or consent, so this view is showing live governance findings derived from your actual tenant state.";
+  return `<div class="card card-pad">
+    <div class="toolbar">
+      <div>
+        <p class="eyebrow">Live identity governance</p>
+        <h2 style="margin:4px 0">Identity Risks</h2>
+        <div class="muted" style="font-size:12px">Read-only findings generated from live users, groups, authentication methods, privileged roles, and Azure RBAC. ${esc(idpText)}</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${badge(`${meta.liveGovernanceRiskCount||0} governance findings`,(meta.liveGovernanceRiskCount||0)>0?"warn":"good")}
+        ${badge(meta.identityProtectionRiskCount?`${meta.identityProtectionRiskCount} ID Protection findings`:"ID Protection: limited",meta.identityProtectionRiskCount?"bad":"neutral")}
+      </div>
+    </div>
+    <div class="callout">"Live governance finding" means the console derived the issue from observable tenant configuration. "Entra ID Protection" means Microsoft generated the risk telemetry.</div>
+    <div class="table-wrap section-gap"><table>
+      <thead><tr><th>Severity</th><th>Finding</th><th>Entity</th><th>Source</th><th>Evidence</th><th>Status</th></tr></thead>
+      <tbody>${rows||'<tr><td colspan="6" class="empty">No live identity-risk findings were generated from the current tenant data.</td></tr>'}</tbody>
+    </table></div>
+  </div>`;
+};
 
 /* ---------- Editable privileged access and identity risk management ---------- */
 function nextPimId(){
