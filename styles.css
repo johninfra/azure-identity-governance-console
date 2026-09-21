@@ -38,3 +38,15 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.app-shell{displ
 .actions-cell{white-space:nowrap}
 .actions-cell .button{margin:2px}
 @media(max-width:700px){.checkbox-grid{grid-template-columns:1fr}.modal.wide{max-height:96vh}}
+
+.hidden{display:none!important}
+.local-badge.live-badge{background:#0d2a20;color:#73dfaf;border:1px solid #245b48}
+.live-mode-banner{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:16px;padding:13px 15px;border:1px solid #28614d;background:linear-gradient(90deg,rgba(20,74,55,.36),rgba(10,32,35,.54));border-radius:12px}
+.live-mode-banner strong,.live-mode-banner span{display:block}
+.live-mode-banner strong{font-size:13px;color:#a9edca}
+.live-mode-banner>div>span{margin-top:3px;color:#91b9ad;font-size:10px}
+.live-mode-flags{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+#liveTenantButton{border-color:#2d6b59;color:#b8ead4;background:#0d2a20}
+#liveTenantButton:hover{background:#123b2d}
+#demoModeButton{border-color:#36506a}
+button:disabled{opacity:.55;cursor:not-allowed}
