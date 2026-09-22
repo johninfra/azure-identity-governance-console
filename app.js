@@ -683,15 +683,20 @@ async function returnToDemoMode(){
 function liveModeBanner(){
   if(!liveTenantMode)return "";
   const meta=liveTenantMeta||{};
-  return `<div class="live-mode-banner">
-    <div><strong>Live Tenant Connected</strong><span>Read-only Microsoft Graph / Azure data · synced ${esc(state.liveSyncedAt?new Date(state.liveSyncedAt).toLocaleString():"now")}</span></div>
-    <div class="live-mode-flags">
-      ${badge(`${state.users.length} users`,"good")}
-      ${badge(`${state.groups.length} groups`,"blue")}
-      ${badge(meta.authMethodsReadable?"Auth methods readable":"Auth methods limited",meta.authMethodsReadable?"good":"warn")}
-      ${badge(meta.signInsAvailable?"Sign-ins available":"Sign-ins need P1/P2",meta.signInsAvailable?"good":"warn")}
-      ${badge(meta.azureRbacAvailable?"Azure RBAC synced":"Azure RBAC not synced",meta.azureRbacAvailable?"blue":"neutral")}
+  const armIssue=meta.azureRbacError||meta.azureResourcePimError;
+  return `<div>
+    <div class="live-mode-banner">
+      <div><strong>Live Tenant Connected</strong><span>Read-only Microsoft Graph / Azure data · synced ${esc(state.liveSyncedAt?new Date(state.liveSyncedAt).toLocaleString():"now")}</span></div>
+      <div class="live-mode-flags">
+        ${badge(`${state.users.length} users`,"good")}
+        ${badge(`${state.groups.length} groups`,"blue")}
+        ${badge(meta.authMethodsReadable?"Auth methods readable":"Auth methods limited",meta.authMethodsReadable?"good":"warn")}
+        ${badge(meta.signInsAvailable?"Sign-ins available":"Sign-ins need P1/P2",meta.signInsAvailable?"good":"warn")}
+        ${badge(meta.azureRbacAvailable?"Azure RBAC synced":"Azure RBAC unavailable",meta.azureRbacAvailable?"blue":"bad")}
+        ${badge(meta.azureResourcePimAvailable?`Azure PIM synced (${meta.azureResourcePimEligibleCount||0} eligible / ${meta.azureResourcePimActiveCount||0} active)`:"Azure PIM unavailable",meta.azureResourcePimAvailable?"purple":"neutral")}
+      </div>
     </div>
+    ${armIssue?`<div class="callout arm-error-callout"><strong>Azure authorization telemetry unavailable.</strong><div>${esc(armIssue)}</div><div style="margin-top:6px">Microsoft Graph identity data may still be current, but effective Azure authorization cannot be treated as zero while ARM/PIM retrieval is failing.</div></div>`:""}
   </div>`;
 }
 const originalRender=render;
@@ -737,18 +742,20 @@ roles=function(){
     <td class="name-cell"><strong>${esc(r.principal)}</strong><span>${esc(r.upn||r.principalType||"")}</span></td>
     <td>${esc(r.role)}</td><td class="wrap-cell">${esc(r.scope)}</td>
     <td>${badge(r.source,r.source==="Group"?"good":"warn")}</td>
+    <td>${pimStateBadge(r.accessState||"Active RBAC")}</td>
     <td>${r.privileged?badge("Privileged","purple"):badge("Standard","neutral")}</td>
   </tr>`).join("");
-  return tablePage("Live Azure RBAC assignments","Read-only Azure role assignments synchronized from the configured subscription.",["Principal","Role","Scope","Source","Classification"],rows);
+  return tablePage("Live Azure RBAC assignments","Read-only Azure role assignments synchronized from the configured subscription, with PIM-derived state when available.",["Principal","Role","Scope","Source","Access state","Classification"],rows);
 };
 const demoPrivilegedRenderer=privileged;
 privileged=function(){
   if(!liveTenantMode)return demoPrivilegedRenderer();
   const rows=filtered(state.pim).map(p=>`<tr>
-    <td>${esc(p.user)}</td><td>${esc(p.role)}</td><td class="wrap-cell">${esc(p.scope)}</td>
+    <td>${esc(p.user)}</td><td>${badge(p.kind||"Entra directory",p.kind==="Azure resource PIM"?"purple":"neutral")}</td>
+    <td>${esc(p.role)}</td><td class="wrap-cell">${esc(p.scope)}</td>
     <td>${pimStateBadge(p.state)}</td><td>${esc(p.expires)}</td>
   </tr>`).join("");
-  return tablePage("Live privileged directory access","Active Entra role assignments are shown on all tenants; eligible/PIM schedule data appears when licensing and permissions expose it.",["Identity","Role","Scope","State","Expiration"],rows);
+  return tablePage("Live privileged access","Read-only Entra directory and Azure-resource PIM assignments. Azure resource records distinguish Eligible PIM, Active PIM, and Activated JIT when ARM exposes that state.",["Identity","Control plane","Role","Scope","State","Expiration"],rows);
 };
 audit=function(){
   const rows=filtered(state.audit).map(a=>`<tr><td>${esc(a.time)}</td><td>${esc(a.actor)}</td><td><strong>${esc(a.action)}</strong></td><td class="wrap-cell">${esc(a.target)}</td><td>${statusBadge(a.result)}</td></tr>`).join("");
@@ -984,7 +991,12 @@ function nextRiskId(){
   return "R-"+String(max+1).padStart(2,"0");
 }
 function pimStateBadge(s){
-  return badge(s,s==="Active"?"good":s==="Eligible"?"blue":s==="Expired"?"neutral":"neutral");
+  return badge(
+    s,
+    s==="Active"||s==="Active PIM"||s==="Activated JIT"?"good":
+    s==="Eligible"||s==="Eligible PIM"?"blue":
+    s==="Expired"?"neutral":"neutral"
+  );
 }
 function riskStatusBadge(s){
   return badge(s,s==="Open"?"bad":s==="Remediated"?"good":s==="Accepted"?"warn":"neutral");
