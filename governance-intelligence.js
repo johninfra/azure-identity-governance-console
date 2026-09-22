@@ -268,6 +268,9 @@
       document.body.appendChild(modal);
     }
 
+    const azureAuthUnavailable=liveTenantMode&&liveTenantMeta&&liveTenantMeta.azureRbacAvailable===false;
+    const azureAuthError=azureAuthUnavailable?(liveTenantMeta.azureRbacError||'Azure Resource Manager authorization data could not be retrieved.'):'';
+
     modal.innerHTML=`<div class="modal intel-modal">
       <div class="modal-header">
         <div><p class="eyebrow">Identity 360</p><h2>${esc(u.name)}</h2><div class="muted">${esc(u.upn||u.id)}</div></div>
@@ -277,8 +280,8 @@
         <div class="mini-stat"><strong>${esc(u.status)}</strong><span>Account</span></div>
         <div class="mini-stat"><strong>${esc(mfaText)}</strong><span>Strong auth</span></div>
         <div class="mini-stat"><strong>${groupNames.length}</strong><span>Groups</span></div>
-        <div class="mini-stat"><strong>${paths.length}</strong><span>Access paths</span></div>
-        <div class="mini-stat"><strong>${privileged.length}</strong><span>Privileged paths</span></div>
+        <div class="mini-stat"><strong>${azureAuthUnavailable?'Unavailable':paths.length}</strong><span>Access paths</span></div>
+        <div class="mini-stat"><strong>${azureAuthUnavailable?'—':privileged.length}</strong><span>Privileged paths</span></div>
       </div>
 
       <div class="intel-modal-grid section-gap">
@@ -290,8 +293,9 @@
         </div>
       </div>
 
-      <div class="intel-panel section-gap"><div class="card-header"><div><p class="eyebrow">Effective authorization</p><h3>Access paths</h3></div>${badge(`${paths.length} path${paths.length===1?'':'s'}`,paths.length?'blue':'neutral')}</div>
-        <div class="path-list">${paths.length?paths.map(p=>`<div class="path-row"><div>${pathChain(p.nodes)}</div><div>${badge(p.source,p.source==='Group'?'good':p.source==='Direct'?'warn':'purple')} ${p.privileged?badge('Privileged','purple'):''}</div></div>`).join(''):'<div class="empty">No effective role paths returned for this identity.</div>'}</div>
+      <div class="intel-panel section-gap"><div class="card-header"><div><p class="eyebrow">Effective authorization</p><h3>Access paths</h3></div>${azureAuthUnavailable?badge('Unavailable','bad'):badge(`${paths.length} path${paths.length===1?'':'s'}`,paths.length?'blue':'neutral')}</div>
+        ${azureAuthUnavailable?`<div class="callout arm-error-callout"><strong>Azure RBAC could not be evaluated.</strong><div style="margin-top:6px">${esc(azureAuthError)}</div><div style="margin-top:6px">Do not interpret this as zero Azure access.</div></div>`:''}
+        <div class="path-list">${paths.length?paths.map(p=>`<div class="path-row"><div>${pathChain(p.nodes)}</div><div>${p.accessState?badge(p.accessState,p.accessState==='Activated JIT'?'good':p.accessState==='Eligible PIM'?'blue':p.accessState==='Active PIM'?'purple':'neutral'):''} ${badge(p.source,p.source==='Group'?'good':p.source==='Direct'?'warn':'purple')} ${p.privileged?badge('Privileged','purple'):''}</div></div>`).join(''):(azureAuthUnavailable?'':'<div class="empty">No effective role paths returned for this identity.</div>')}</div>
       </div>
 
       <div class="intel-modal-grid section-gap">
