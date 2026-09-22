@@ -310,6 +310,23 @@
         paged(`${GRAPH}/roleManagement/directory/roleAssignments`, graphToken)
       ]);
 
+    let conditionalAccessPoliciesRaw = [];
+    let conditionalAccessAvailable = false;
+    let conditionalAccessError = "";
+    try {
+      // Conditional Access policy inventory is isolated from the core Graph sync so
+      // a policy permission/role failure never breaks identities, groups, audit, or RBAC.
+      let policyToken = await acquireOptionalSilent(["Policy.Read.All"], config);
+      if (!policyToken) policyToken = await acquire(["Policy.Read.All"], config);
+      conditionalAccessPoliciesRaw = await paged(
+        `${GRAPH}/identity/conditionalAccess/policies?$select=id,displayName,state,createdDateTime,modifiedDateTime,conditions,grantControls,sessionControls`,
+        policyToken
+      );
+      conditionalAccessAvailable = true;
+    } catch (e) {
+      conditionalAccessError = `Conditional Access policy query failed: ${normalizeError(e)}`;
+    }
+
     const groupDetails = await mapLimit(groupsRaw, 5, async g => {
       let members = [], owners = [];
       try {
@@ -507,6 +524,105 @@
       dynamic: (g.groupTypes || []).includes("DynamicMembership") || !!g.membershipRule,
       memberIds: (g._members || []).map(x => x.id)
     }));
+
+    const userLabel = id => {
+      if (id === "All") return "All users";
+      if (id === "None") return "None";
+      const u = usersRaw.find(x => String(x.id).toLowerCase() === String(id).toLowerCase());
+      return u?.displayName || u?.userPrincipalName || id;
+    };
+    const groupLabel = id => {
+      const g = groupsRaw.find(x => String(x.id).toLowerCase() === String(id).toLowerCase());
+      return g?.displayName || id;
+    };
+    const roleLabel = id => {
+      const r = directoryRoleDefinitions.find(x =>
+        String(x.templateId || "").toLowerCase() === String(id).toLowerCase() ||
+        String(x.id || "").toLowerCase() === String(id).toLowerCase()
+      );
+      return r?.displayName || id;
+    };
+    const appLabel = id => {
+      if (id === "All") return "All cloud apps";
+      if (id === "Office365") return "Office 365";
+      const sp = servicePrincipals.find(x => String(x.appId || "").toLowerCase() === String(id).toLowerCase());
+      return sp?.displayName || id;
+    };
+    const listText = (items, max = 4) => {
+      const clean = [...new Set((items || []).filter(Boolean))];
+      if (!clean.length) return "None";
+      if (clean.length <= max) return clean.join(", ");
+      return `${clean.slice(0, max).join(", ")} +${clean.length - max} more`;
+    };
+    const controlLabel = value => ({
+      block: "Block access",
+      mfa: "Require MFA",
+      compliantDevice: "Require compliant device",
+      domainJoinedDevice: "Require hybrid joined device",
+      approvedApplication: "Require approved client app",
+      compliantApplication: "Require app protection policy",
+      passwordChange: "Require password change"
+    }[value] || value);
+
+    const conditionalAccessPolicies = conditionalAccessPoliciesRaw
+      .filter(p => String(p.state || "").toLowerCase() === "enabled")
+      .map(p => {
+        const usersCondition = p?.conditions?.users || {};
+        const appsCondition = p?.conditions?.applications || {};
+        const grants = p?.grantControls || {};
+        const includedUsers = [
+          ...(usersCondition.includeUsers || []).map(userLabel),
+          ...(usersCondition.includeGroups || []).map(id => `Group: ${groupLabel(id)}`),
+          ...(usersCondition.includeRoles || []).map(id => `Role: ${roleLabel(id)}`),
+          ...(usersCondition.includeGuestsOrExternalUsers ? ["Guests / external users"] : [])
+        ];
+        const excludedUsers = [
+          ...(usersCondition.excludeUsers || []).map(userLabel),
+          ...(usersCondition.excludeGroups || []).map(id => `Group: ${groupLabel(id)}`),
+          ...(usersCondition.excludeRoles || []).map(id => `Role: ${roleLabel(id)}`),
+          ...(usersCondition.excludeGuestsOrExternalUsers ? ["Guests / external users"] : [])
+        ];
+        const targetApps = [
+          ...(appsCondition.includeApplications || []).map(appLabel),
+          ...(appsCondition.includeUserActions || []).map(x => `User action: ${x}`),
+          ...(appsCondition.includeAuthenticationContextClassReferences || []).map(x => `Auth context: ${x}`)
+        ];
+        const excludedApps = (appsCondition.excludeApplications || []).map(appLabel);
+
+        const builtInControls = (grants.builtInControls || []).map(controlLabel);
+        if (grants.authenticationStrength?.displayName) {
+          builtInControls.push(`Authentication strength: ${grants.authenticationStrength.displayName}`);
+        }
+        const grantText = grants.operator && builtInControls.length > 1
+          ? builtInControls.join(` ${String(grants.operator).toUpperCase()} `)
+          : listText(builtInControls);
+
+        const riskParts = [];
+        if ((p?.conditions?.signInRiskLevels || []).length) {
+          riskParts.push(`Sign-in: ${p.conditions.signInRiskLevels.join(", ")}`);
+        }
+        if ((p?.conditions?.userRiskLevels || []).length) {
+          riskParts.push(`User: ${p.conditions.userRiskLevels.join(", ")}`);
+        }
+        if ((p?.conditions?.servicePrincipalRiskLevels || []).length) {
+          riskParts.push(`Workload: ${p.conditions.servicePrincipalRiskLevels.join(", ")}`);
+        }
+
+        return {
+          id: p.id,
+          name: p.displayName || p.id,
+          state: "On",
+          users: listText(includedUsers),
+          exclusions: listText(excludedUsers),
+          apps: listText(targetApps),
+          excludedApps: listText(excludedApps),
+          grant: grantText === "None" ? "No grant control returned" : grantText,
+          risk: riskParts.some(x => /high/i.test(x)) ? "High" : riskParts.some(x => /medium/i.test(x)) ? "Medium" : "Low",
+          riskSummary: riskParts.length ? riskParts.join(" · ") : "No user/sign-in risk condition",
+          created: formatDate(p.createdDateTime),
+          modified: formatDate(p.modifiedDateTime)
+        };
+      });
 
     const azureAssignmentKey = (principalId, roleDefinitionId, scope) =>
       [principalId, roleDefinitionId, scope].map(v => String(v || "").toLowerCase()).join("|");
@@ -746,6 +862,7 @@
       risks,
       audit,
       accessActivity,
+      policies: conditionalAccessPolicies,
       meta: {
         signInsAvailable: signIns.length > 0,
         authMethodsReadable: Object.values(authMethods).some(Array.isArray),
@@ -755,6 +872,11 @@
         azureResourcePimError,
         azureResourcePimActiveCount: azureRoleAssignmentScheduleInstances.length,
         azureResourcePimEligibleCount: azureRoleEligibilityScheduleInstances.length,
+        conditionalAccessAvailable,
+        conditionalAccessError,
+        conditionalAccessEnabledCount: conditionalAccessPolicies.length,
+        conditionalAccessReportOnlyCount: conditionalAccessPoliciesRaw.filter(p => String(p.state || "").toLowerCase() === "enabledforreportingbutnotenforced").length,
+        conditionalAccessDisabledCount: conditionalAccessPoliciesRaw.filter(p => String(p.state || "").toLowerCase() === "disabled").length,
         riskDetectionsAvailable,
         riskyUsersAvailable,
         liveGovernanceRiskCount: risks.filter(r => r.source === "Live governance finding").length,
