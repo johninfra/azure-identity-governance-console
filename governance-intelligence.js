@@ -21,19 +21,22 @@
     const identities=new Set([norm(u.name),norm(u.upn)].filter(Boolean));
 
     for(const r of state.roleAssignments||[]){
+      const accessState=r.accessState||'Active RBAC';
       if(identities.has(norm(r.principal))){
         paths.push({
           userId:u.id,user:u.name,kind:'Azure RBAC',source:'Direct',via:'Direct',
+          accessState,
           role:r.role,scope:r.scope,privileged:!!r.privileged||isPrivilegedRole(r.role),
-          nodes:[u.name,r.role,r.scope]
+          nodes:[u.name,accessState,r.role,r.scope]
         });
       }
       for(const g of memberships){
         if(norm(r.principal)===norm(g.name)){
           paths.push({
             userId:u.id,user:u.name,kind:'Azure RBAC',source:'Group',via:g.name,
+            accessState,
             role:r.role,scope:r.scope,privileged:!!r.privileged||isPrivilegedRole(r.role),
-            nodes:[u.name,g.name,r.role,r.scope]
+            nodes:[u.name,g.name,accessState,r.role,r.scope]
           });
         }
       }
@@ -51,11 +54,23 @@
     }
 
     for(const p of state.pim||[]){
-      if(norm(p.user)!==norm(u.name)&&norm(p.user)!==norm(u.upn))continue;
+      const matchesDirect=norm(p.user)===norm(u.name)||norm(p.user)===norm(u.upn)||String(p.principalId||'')===String(u.id||'');
+      const group=memberships.find(g=>String(g.id||'')===String(p.principalId||'')||norm(g.name)===norm(p.user));
+      if(!matchesDirect&&!group)continue;
+
+      const stateLabel=p.state||'PIM';
+      const kind=p.kind==='Azure resource PIM'?'Azure resource PIM':'Directory PIM';
+      const source=group?'Group':(matchesDirect?'Direct':'PIM');
+      const via=group?group.name:'Privileged Identity Management';
+      const nodes=group
+        ? [u.name,group.name,stateLabel,p.role,p.scope||'Tenant directory']
+        : [u.name,stateLabel,p.role,p.scope||'Tenant directory'];
+
       paths.push({
-        userId:u.id,user:u.name,kind:'PIM',source:p.state||'PIM',via:'Privileged Identity Management',
-        role:p.role,scope:p.scope||'Tenant directory',privileged:isPrivilegedRole(p.role),
-        nodes:[u.name,`PIM ${p.state||'Assignment'}`,p.role,p.scope||'Tenant directory']
+        userId:u.id,user:u.name,kind,source,via,
+        accessState:stateLabel,
+        role:p.role,scope:p.scope||'Tenant directory',privileged:true,
+        nodes
       });
     }
 
@@ -253,6 +268,9 @@
       document.body.appendChild(modal);
     }
 
+    const azureAuthUnavailable=liveTenantMode&&liveTenantMeta&&liveTenantMeta.azureRbacAvailable===false;
+    const azureAuthError=azureAuthUnavailable?(liveTenantMeta.azureRbacError||'Azure Resource Manager authorization data could not be retrieved.'):'';
+
     modal.innerHTML=`<div class="modal intel-modal">
       <div class="modal-header">
         <div><p class="eyebrow">Identity 360</p><h2>${esc(u.name)}</h2><div class="muted">${esc(u.upn||u.id)}</div></div>
@@ -262,8 +280,8 @@
         <div class="mini-stat"><strong>${esc(u.status)}</strong><span>Account</span></div>
         <div class="mini-stat"><strong>${esc(mfaText)}</strong><span>Strong auth</span></div>
         <div class="mini-stat"><strong>${groupNames.length}</strong><span>Groups</span></div>
-        <div class="mini-stat"><strong>${paths.length}</strong><span>Access paths</span></div>
-        <div class="mini-stat"><strong>${privileged.length}</strong><span>Privileged paths</span></div>
+        <div class="mini-stat"><strong>${azureAuthUnavailable?'Unavailable':paths.length}</strong><span>Access paths</span></div>
+        <div class="mini-stat"><strong>${azureAuthUnavailable?'—':privileged.length}</strong><span>Privileged paths</span></div>
       </div>
 
       <div class="intel-modal-grid section-gap">
@@ -275,8 +293,9 @@
         </div>
       </div>
 
-      <div class="intel-panel section-gap"><div class="card-header"><div><p class="eyebrow">Effective authorization</p><h3>Access paths</h3></div>${badge(`${paths.length} path${paths.length===1?'':'s'}`,paths.length?'blue':'neutral')}</div>
-        <div class="path-list">${paths.length?paths.map(p=>`<div class="path-row"><div>${pathChain(p.nodes)}</div><div>${badge(p.source,p.source==='Group'?'good':p.source==='Direct'?'warn':'purple')} ${p.privileged?badge('Privileged','purple'):''}</div></div>`).join(''):'<div class="empty">No effective role paths returned for this identity.</div>'}</div>
+      <div class="intel-panel section-gap"><div class="card-header"><div><p class="eyebrow">Effective authorization</p><h3>Access paths</h3></div>${azureAuthUnavailable?badge('Unavailable','bad'):badge(`${paths.length} path${paths.length===1?'':'s'}`,paths.length?'blue':'neutral')}</div>
+        ${azureAuthUnavailable?`<div class="callout arm-error-callout"><strong>Azure RBAC could not be evaluated.</strong><div style="margin-top:6px">${esc(azureAuthError)}</div><div style="margin-top:6px">Do not interpret this as zero Azure access.</div></div>`:''}
+        <div class="path-list">${paths.length?paths.map(p=>`<div class="path-row"><div>${pathChain(p.nodes)}</div><div>${p.accessState?badge(p.accessState,p.accessState==='Activated JIT'?'good':p.accessState==='Eligible PIM'?'blue':p.accessState==='Active PIM'?'purple':'neutral'):''} ${badge(p.source,p.source==='Group'?'good':p.source==='Direct'?'warn':'purple')} ${p.privileged?badge('Privileged','purple'):''}</div></div>`).join(''):(azureAuthUnavailable?'':'<div class="empty">No effective role paths returned for this identity.</div>')}</div>
       </div>
 
       <div class="intel-modal-grid section-gap">
