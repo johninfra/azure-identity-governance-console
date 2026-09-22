@@ -130,8 +130,24 @@ function risks(){
  return tablePage("Identity risk register","Prioritized IAM findings that model common governance and hygiene issues.",["Severity","Finding","Entity","Status","Action"],rows)
 }
 function policies(){
- const rows=filtered(state.policies).map(p=>`<tr><td><strong>${p.name}</strong></td><td>${statusBadge(p.state)}</td><td>${p.users}</td><td>${p.apps}</td><td>${p.grant}</td><td>${riskBadge(p.risk)}</td></tr>`).join("");
- return tablePage("Conditional Access policies","Policy inventory for identity-centric zero-trust access controls.",["Policy","State","Assignments","Target apps","Grant control","Risk"],rows)
+ const rows=filtered(state.policies).map(p=>`<tr>
+   <td class="name-cell"><strong>${esc(p.name)}</strong><span>${esc(p.id||"")}</span></td>
+   <td>${statusBadge(p.state)}</td>
+   <td class="wrap-cell">${esc(p.users)}</td>
+   <td class="wrap-cell">${esc(p.exclusions||"None")}</td>
+   <td class="wrap-cell">${esc(p.apps)}</td>
+   <td class="wrap-cell">${esc(p.grant)}</td>
+   <td class="wrap-cell">${esc(p.riskSummary||"No user/sign-in risk condition")}</td>
+   <td>${esc(p.modified||"—")}</td>
+ </tr>`).join("");
+ return tablePage(
+   "Conditional Access policies",
+   liveTenantMode
+     ? "Currently enabled Microsoft Entra Conditional Access policies synchronized read-only from Microsoft Graph."
+     : "Policy inventory for identity-centric zero-trust access controls.",
+   ["Policy","State","Included identities","Exclusions","Target apps","Grant control","Risk conditions","Last modified"],
+   rows
+ )
 }
 function audit(){
  const rows=filtered(state.audit).map(a=>`<tr><td>${a.time}</td><td>${a.actor}</td><td><strong>${a.action}</strong></td><td>${a.target}</td><td>${statusBadge(a.result)}</td></tr>`).join("");
@@ -652,6 +668,7 @@ async function syncLiveTenantFromForm(e){
       risks:live.risks,
       audit:live.audit,
       accessActivity:live.accessActivity||[],
+      policies:live.policies||[],
       liveSyncedAt:live.syncedAt
     };
     liveTenantMode=true;
@@ -694,6 +711,7 @@ function liveModeBanner(){
         ${badge(meta.signInsAvailable?"Sign-ins available":"Sign-ins need P1/P2",meta.signInsAvailable?"good":"warn")}
         ${badge(meta.azureRbacAvailable?"Azure RBAC synced":"Azure RBAC unavailable",meta.azureRbacAvailable?"blue":"bad")}
         ${badge(meta.azureResourcePimAvailable?`Azure PIM synced (${meta.azureResourcePimEligibleCount||0} eligible / ${meta.azureResourcePimActiveCount||0} active)`:"Azure PIM unavailable",meta.azureResourcePimAvailable?"purple":"neutral")}
+        ${badge(meta.conditionalAccessAvailable?`CA synced (${meta.conditionalAccessEnabledCount||0} enabled)`:"CA unavailable",meta.conditionalAccessAvailable?"good":"neutral")}
       </div>
     </div>
     ${armIssue?`<div class="callout arm-error-callout"><strong>Azure authorization telemetry unavailable.</strong><div>${esc(armIssue)}</div><div style="margin-top:6px">Microsoft Graph identity data may still be current, but effective Azure authorization cannot be treated as zero while ARM/PIM retrieval is failing.</div></div>`:""}
@@ -757,6 +775,35 @@ privileged=function(){
   </tr>`).join("");
   return tablePage("Live privileged access","Read-only Entra directory and Azure-resource PIM assignments. Azure resource records distinguish Eligible PIM, Active PIM, and Activated JIT when ARM exposes that state.",["Identity","Control plane","Role","Scope","State","Expiration"],rows);
 };
+
+const demoPoliciesRenderer=policies;
+policies=function(){
+  if(!liveTenantMode)return demoPoliciesRenderer();
+  const meta=liveTenantMeta||{};
+  if(meta.conditionalAccessAvailable===false){
+    return `<div class="card card-pad">
+      <div class="card-header"><div><p class="eyebrow">Microsoft Entra</p><h2>Conditional Access policies</h2><div class="muted" style="font-size:12px;margin-top:5px">Live policy inventory could not be retrieved.</div></div>${badge("Unavailable","bad")}</div>
+      <div class="callout arm-error-callout"><strong>Conditional Access policy data unavailable.</strong><div style="margin-top:6px">${esc(meta.conditionalAccessError||"Microsoft Graph did not return the policy inventory.")}</div></div>
+    </div>`;
+  }
+  const rows=filtered(state.policies).map(p=>`<tr>
+    <td class="name-cell"><strong>${esc(p.name)}</strong><span>${esc(p.id||"")}</span></td>
+    <td>${statusBadge(p.state)}</td>
+    <td class="wrap-cell">${esc(p.users)}</td>
+    <td class="wrap-cell">${esc(p.exclusions||"None")}</td>
+    <td class="wrap-cell">${esc(p.apps)}</td>
+    <td class="wrap-cell">${esc(p.grant)}</td>
+    <td class="wrap-cell">${esc(p.riskSummary||"No user/sign-in risk condition")}</td>
+    <td>${esc(p.modified||"—")}</td>
+  </tr>`).join("");
+  const summary=`${meta.conditionalAccessEnabledCount||0} enabled · ${meta.conditionalAccessReportOnlyCount||0} report-only · ${meta.conditionalAccessDisabledCount||0} disabled`;
+  return `<div class="card card-pad">
+    <div class="card-header"><div><p class="eyebrow">Microsoft Entra</p><h2>Enabled Conditional Access policies</h2><div class="muted" style="font-size:12px;margin-top:5px">Read-only live inventory from Microsoft Graph · ${esc(summary)}</div></div>${badge(`${state.policies.length} enabled`,"good")}</div>
+    <div class="table-wrap"><table><thead><tr><th>Policy</th><th>State</th><th>Included identities</th><th>Exclusions</th><th>Target apps</th><th>Grant control</th><th>Risk conditions</th><th>Last modified</th></tr></thead>
+    <tbody>${rows||'<tr><td colspan="8" class="empty">No enabled Conditional Access policies returned.</td></tr>'}</tbody></table></div>
+  </div>`;
+};
+
 audit=function(){
   const rows=filtered(state.audit).map(a=>`<tr><td>${esc(a.time)}</td><td>${esc(a.actor)}</td><td><strong>${esc(a.action)}</strong></td><td class="wrap-cell">${esc(a.target)}</td><td>${statusBadge(a.result)}</td></tr>`).join("");
   return tablePage(liveTenantMode?"Live directory audit":"Audit log",liveTenantMode?"Recent read-only Microsoft Entra directory audit activity.":"Immutable-style local event history for governance actions in this demo.",["Time","Actor","Activity","Target","Result"],rows);
