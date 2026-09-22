@@ -36,8 +36,15 @@
   const guid = (v = "") =>
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(v).trim());
 
-  const normalizeError = (e) =>
-    e?.errorMessage || e?.message || e?.errorCode || String(e || "Unknown error");
+  const normalizeError = (e) => {
+    const parts = [];
+    if (e?.errorCode) parts.push(`code=${e.errorCode}`);
+    if (e?.subError) parts.push(`subError=${e.subError}`);
+    if (e?.correlationId) parts.push(`correlationId=${e.correlationId}`);
+    const message = e?.errorMessage || e?.message;
+    if (message) parts.push(message);
+    return parts.join(" | ") || String(e || "Unknown error");
+  };
 
   async function api(url, token) {
     const res = await fetch(url, {
@@ -47,7 +54,13 @@
       let detail = `${res.status} ${res.statusText}`;
       try {
         const body = await res.json();
-        detail = body?.error?.message || body?.error?.code || detail;
+        const code = body?.error?.code;
+        const message = body?.error?.message;
+        detail = [
+          `${res.status} ${res.statusText}`,
+          code ? `code=${code}` : "",
+          message || ""
+        ].filter(Boolean).join(" | ");
       } catch {}
       throw new Error(`${detail} — ${url}`);
     }
@@ -360,16 +373,71 @@
 
     let azureRoleAssignments = [];
     let azureRoleDefinitions = [];
+    let azureRoleAssignmentScheduleInstances = [];
+    let azureRoleEligibilityScheduleInstances = [];
+    let azureRbacAvailable = false;
+    let azureRbacError = "";
+    let azureResourcePimAvailable = false;
+    let azureResourcePimError = "";
+
     const subscriptionId = String(config.subscriptionId || "").trim();
     const usableSubscriptionId = guid(subscriptionId) && subscriptionId.toLowerCase() !== TENANT_ID.toLowerCase();
     if (usableSubscriptionId) {
+      let armToken = null;
       try {
-        const armToken = await acquire(ARM_SCOPES, config);
-        [azureRoleAssignments, azureRoleDefinitions] = await Promise.all([
-          paged(`${ARM}/subscriptions/${subscriptionId}/providers/Microsoft.Authorization/roleAssignments?api-version=2022-04-01`, armToken),
-          paged(`${ARM}/subscriptions/${subscriptionId}/providers/Microsoft.Authorization/roleDefinitions?api-version=2022-04-01`, armToken)
-        ]);
-      } catch {}
+        armToken = await acquire(ARM_SCOPES, config);
+      } catch (e) {
+        azureRbacError = `MSAL ARM token acquisition failed: ${normalizeError(e)}`;
+        azureResourcePimError = azureRbacError;
+      }
+
+      if (armToken) {
+        try {
+          [azureRoleAssignments, azureRoleDefinitions] = await Promise.all([
+            paged(`${ARM}/subscriptions/${subscriptionId}/providers/Microsoft.Authorization/roleAssignments?api-version=2022-04-01`, armToken),
+            paged(`${ARM}/subscriptions/${subscriptionId}/providers/Microsoft.Authorization/roleDefinitions?api-version=2022-04-01`, armToken)
+          ]);
+          azureRbacAvailable = true;
+        } catch (e) {
+          azureRbacError = `Azure RBAC query failed: ${normalizeError(e)}`;
+        }
+
+        try {
+          const principalIds = [...new Set([...usersRaw, ...groupsRaw].map(x => x.id).filter(Boolean))];
+          const listForPrincipal = (collection, principalId) =>
+            paged(
+              `${ARM}/subscriptions/${subscriptionId}/providers/Microsoft.Authorization/${collection}?$filter=${encodeURIComponent(`principalId eq ${principalId}`)}&api-version=2020-10-01`,
+              armToken
+            );
+
+          const [activeSets, eligibleSets] = await Promise.all([
+            mapLimit(principalIds, 4, id => listForPrincipal("roleAssignmentScheduleInstances", id)),
+            mapLimit(principalIds, 4, id => listForPrincipal("roleEligibilityScheduleInstances", id))
+          ]);
+
+          const dedupe = (items) => {
+            const seen = new Set();
+            return items.filter(item => {
+              const key = String(item?.id || [
+                item?.properties?.principalId,
+                item?.properties?.roleDefinitionId,
+                item?.properties?.scope,
+                item?.properties?.startDateTime,
+                item?.properties?.endDateTime
+              ].join("|")).toLowerCase();
+              if (seen.has(key)) return false;
+              seen.add(key);
+              return true;
+            });
+          };
+
+          azureRoleAssignmentScheduleInstances = dedupe(activeSets.flat());
+          azureRoleEligibilityScheduleInstances = dedupe(eligibleSets.flat());
+          azureResourcePimAvailable = true;
+        } catch (e) {
+          azureResourcePimError = `Azure resource PIM query failed: ${normalizeError(e)}`;
+        }
+      }
     }
 
     const latestSignInByUser = new Map();
@@ -440,17 +508,40 @@
       memberIds: (g._members || []).map(x => x.id)
     }));
 
+    const azureAssignmentKey = (principalId, roleDefinitionId, scope) =>
+      [principalId, roleDefinitionId, scope].map(v => String(v || "").toLowerCase()).join("|");
+
+    const activeAzurePimByKey = new Map();
+    for (const a of azureRoleAssignmentScheduleInstances) {
+      const props = a?.properties || {};
+      const assignmentType = String(props.assignmentType || "");
+      const state = assignmentType === "Activated" || props.linkedRoleEligibilityScheduleId
+        ? "Activated JIT"
+        : "Active PIM";
+      activeAzurePimByKey.set(
+        azureAssignmentKey(props.principalId, props.roleDefinitionId, props.scope),
+        state
+      );
+    }
+
     const roleAssignments = azureRoleAssignments.map(a => {
-      const p = principalName(usersRaw, groupsRaw, servicePrincipals, a?.properties?.principalId);
-      const defId = String(a?.properties?.roleDefinitionId || "").toLowerCase();
+      const principalId = a?.properties?.principalId;
+      const roleDefinitionId = a?.properties?.roleDefinitionId;
+      const scope = a?.properties?.scope || "—";
+      const p = principalName(usersRaw, groupsRaw, servicePrincipals, principalId);
+      const defId = String(roleDefinitionId || "").toLowerCase();
       const role = azureRoleDefinitions.find(d => String(d.id || "").toLowerCase() === defId)?.properties?.roleName || "Azure role";
+      const accessState = activeAzurePimByKey.get(azureAssignmentKey(principalId, roleDefinitionId, scope)) || "Active RBAC";
       return {
         principal: p.name,
         upn: p.upn,
+        principalId,
         principalType: p.type,
+        roleDefinitionId,
         role,
-        scope: a?.properties?.scope || "—",
+        scope,
         source: p.type === "Group" ? "Group" : "Direct",
+        accessState,
         privileged: ["Owner","Contributor","User Access Administrator"].includes(role)
       };
     });
@@ -460,6 +551,9 @@
       return {
         id: a.id,
         user: p.name,
+        principalId: a.principalId,
+        principalType: p.type,
+        kind: "Entra directory",
         role: roleName(directoryRoleDefinitions, a.roleDefinitionId),
         scope: a.directoryScopeId || a.appScopeId || "Tenant directory",
         state: "Active",
@@ -474,6 +568,9 @@
       return {
         id: a.id,
         user: p.name,
+        principalId: a.principalId,
+        principalType: p.type,
+        kind: "Entra directory",
         role: roleName(directoryRoleDefinitions, a.roleDefinitionId),
         scope: a.directoryScopeId || a.appScopeId || "Tenant directory",
         state: "Eligible",
@@ -484,7 +581,59 @@
       };
     });
 
-    const livePim = [...activeDirectoryAssignments, ...eligibleDirectoryAssignments];
+    const azureResourceActiveAssignments = azureRoleAssignmentScheduleInstances.map(a => {
+      const props = a?.properties || {};
+      const p = principalName(usersRaw, groupsRaw, servicePrincipals, props.principalId);
+      const defId = String(props.roleDefinitionId || "").toLowerCase();
+      const role = azureRoleDefinitions.find(d => String(d.id || "").toLowerCase() === defId)?.properties?.roleName || "Azure role";
+      const activated = String(props.assignmentType || "") === "Activated" || !!props.linkedRoleEligibilityScheduleId;
+      return {
+        id: a.id,
+        user: p.name,
+        principalId: props.principalId,
+        principalType: p.type,
+        kind: "Azure resource PIM",
+        role,
+        roleDefinitionId: props.roleDefinitionId,
+        scope: props.scope || "—",
+        state: activated ? "Activated JIT" : "Active PIM",
+        memberType: props.memberType || "Direct",
+        expires: props.endDateTime ? formatDate(props.endDateTime) : "No expiration exposed",
+        max: "—",
+        mfa: activated,
+        approval: false
+      };
+    });
+
+    const azureResourceEligibleAssignments = azureRoleEligibilityScheduleInstances.map(a => {
+      const props = a?.properties || {};
+      const p = principalName(usersRaw, groupsRaw, servicePrincipals, props.principalId);
+      const defId = String(props.roleDefinitionId || "").toLowerCase();
+      const role = azureRoleDefinitions.find(d => String(d.id || "").toLowerCase() === defId)?.properties?.roleName || "Azure role";
+      return {
+        id: a.id,
+        user: p.name,
+        principalId: props.principalId,
+        principalType: p.type,
+        kind: "Azure resource PIM",
+        role,
+        roleDefinitionId: props.roleDefinitionId,
+        scope: props.scope || "—",
+        state: "Eligible PIM",
+        memberType: props.memberType || "Direct",
+        expires: props.endDateTime ? formatDate(props.endDateTime) : "No expiration exposed",
+        max: "—",
+        mfa: true,
+        approval: false
+      };
+    });
+
+    const livePim = [
+      ...activeDirectoryAssignments,
+      ...eligibleDirectoryAssignments,
+      ...azureResourceActiveAssignments,
+      ...azureResourceEligibleAssignments
+    ];
     const risks = buildLiveRisks({
       users,
       groups,
@@ -600,7 +749,12 @@
       meta: {
         signInsAvailable: signIns.length > 0,
         authMethodsReadable: Object.values(authMethods).some(Array.isArray),
-        azureRbacAvailable: azureRoleAssignments.length > 0,
+        azureRbacAvailable,
+        azureRbacError,
+        azureResourcePimAvailable,
+        azureResourcePimError,
+        azureResourcePimActiveCount: azureRoleAssignmentScheduleInstances.length,
+        azureResourcePimEligibleCount: azureRoleEligibilityScheduleInstances.length,
         riskDetectionsAvailable,
         riskyUsersAvailable,
         liveGovernanceRiskCount: risks.filter(r => r.source === "Live governance finding").length,
