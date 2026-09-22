@@ -21,19 +21,22 @@
     const identities=new Set([norm(u.name),norm(u.upn)].filter(Boolean));
 
     for(const r of state.roleAssignments||[]){
+      const accessState=r.accessState||'Active RBAC';
       if(identities.has(norm(r.principal))){
         paths.push({
           userId:u.id,user:u.name,kind:'Azure RBAC',source:'Direct',via:'Direct',
+          accessState,
           role:r.role,scope:r.scope,privileged:!!r.privileged||isPrivilegedRole(r.role),
-          nodes:[u.name,r.role,r.scope]
+          nodes:[u.name,accessState,r.role,r.scope]
         });
       }
       for(const g of memberships){
         if(norm(r.principal)===norm(g.name)){
           paths.push({
             userId:u.id,user:u.name,kind:'Azure RBAC',source:'Group',via:g.name,
+            accessState,
             role:r.role,scope:r.scope,privileged:!!r.privileged||isPrivilegedRole(r.role),
-            nodes:[u.name,g.name,r.role,r.scope]
+            nodes:[u.name,g.name,accessState,r.role,r.scope]
           });
         }
       }
@@ -51,11 +54,23 @@
     }
 
     for(const p of state.pim||[]){
-      if(norm(p.user)!==norm(u.name)&&norm(p.user)!==norm(u.upn))continue;
+      const matchesDirect=norm(p.user)===norm(u.name)||norm(p.user)===norm(u.upn)||String(p.principalId||'')===String(u.id||'');
+      const group=memberships.find(g=>String(g.id||'')===String(p.principalId||'')||norm(g.name)===norm(p.user));
+      if(!matchesDirect&&!group)continue;
+
+      const stateLabel=p.state||'PIM';
+      const kind=p.kind==='Azure resource PIM'?'Azure resource PIM':'Directory PIM';
+      const source=group?'Group':(matchesDirect?'Direct':'PIM');
+      const via=group?group.name:'Privileged Identity Management';
+      const nodes=group
+        ? [u.name,group.name,stateLabel,p.role,p.scope||'Tenant directory']
+        : [u.name,stateLabel,p.role,p.scope||'Tenant directory'];
+
       paths.push({
-        userId:u.id,user:u.name,kind:'PIM',source:p.state||'PIM',via:'Privileged Identity Management',
-        role:p.role,scope:p.scope||'Tenant directory',privileged:isPrivilegedRole(p.role),
-        nodes:[u.name,`PIM ${p.state||'Assignment'}`,p.role,p.scope||'Tenant directory']
+        userId:u.id,user:u.name,kind,source,via,
+        accessState:stateLabel,
+        role:p.role,scope:p.scope||'Tenant directory',privileged:true,
+        nodes
       });
     }
 
