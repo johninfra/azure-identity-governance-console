@@ -14,4 +14,7 @@ assert.deepEqual(config.routes[0].allowedRoles,['authenticated']); // Not app-ro
 assert.ok(config.globalHeaders['X-Content-Type-Options']==='nosniff');
 assert.ok(config.globalHeaders['X-Frame-Options']==='DENY');
 assert.match(live,/cacheLocation: "sessionStorage"/);
+assert.match(live,/endpoint\.origin !== new URL\(GRAPH\)\.origin/);
+assert.match(app,/\$\{esc\(r\.role\)\}/);
+assert.match(app,/\$\{esc\(r\.scope\)\}/);
 console.log('Static security regression checks passed; authorization remains a deployment blocker.');
