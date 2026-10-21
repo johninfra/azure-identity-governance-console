@@ -1,25 +1,16 @@
 # Deployment Guide
 
-## GitHub Pages
+## Public GitHub Pages: demo only
 
-The application is fully static and requires no build step.
+**Public URL:** https://johninfra.github.io/azure-identity-governance-console/
 
-1. In GitHub, open **Settings → Pages**.
-2. Under **Build and deployment**, choose **Deploy from a branch**.
-3. Select **main** and **/(root)**.
-4. Save.
+GitHub Pages serves the portfolio's fictional demo data and simulated IAM workflows. It **does not offer an authenticated live-tenant experience**. The application deliberately disables the live Microsoft Entra connector when hosted on `github.io` (or opened as a `file:` URL). No visitor can authenticate from that link to access the author's tenant or another organization's tenant.
 
-The expected Pages URL is:
+The static project requires no build step. GitHub Pages settings: **Settings → Pages → Deploy from a branch → main → /(root)**.
 
-```text
-https://johninfra.github.io/azure-identity-governance-console/
-```
+## Azure Static Web Apps: author's fixed tenant
 
-## Azure Static Web Apps
-
-This repository is designed to be imported directly into Azure Static Web Apps.
-
-Recommended values when creating the Azure resource:
+The separately hosted Azure Static Web Apps deployment is the intended path for the author's **single Entra lab tenant** and optional **Connect Live Tenant** workflow. It uses a tenant-fixed MSAL authority, delegated Microsoft Graph scopes, and Azure Resource Manager access where available; returned data is **read-only** and limited to what the signed-in lab account is authorized to see.
 
 | Setting | Value |
 | --- | --- |
@@ -28,39 +19,32 @@ Recommended values when creating the Azure resource:
 | Branch | main |
 | Build preset | Custom |
 | App location | / |
-| API location | leave blank |
-| Output location | leave blank |
+| API location | blank |
+| Output location | blank |
 
-Because this version uses plain HTML/CSS/JavaScript, there is no application build command or generated output directory.
+The SWA `staticwebapp.config.json` defines tenant-specific OIDC hosting configuration, an `authenticated` route requirement, and a login redirect. Its app settings/secrets must be configured in Azure (never committed to source). The browser MSAL SPA also requires the appropriate redirect URI and approved delegated Graph permissions; the two authentication sessions are distinct.
 
-Azure will create the deployment workflow after authorization. Keep the deployment token/credentials in GitHub Actions secrets; never place them in source files.
+**Important:** The SWA hosting authentication gate is configured in source, but previous `/.auth/me` testing did not establish reliable end-to-end route enforcement. Do not represent that control as verified solely because MSAL sign-in or CI succeeded. This deployment is a personal lab, not an enterprise-certified application.
 
 ## Validation checklist
 
-After deployment verify:
+### Public demo
+- GitHub Pages loads the seeded fictional data.
+- Sample dashboard/navigation and local workflows operate as simulations.
+- **Connect Live Tenant** is blocked/disabled on GitHub Pages.
+- No real directory exports, access tokens, or secret credentials are published.
 
-- Dashboard loads without console errors.
-- Navigation works on desktop and mobile.
-- New access requests can be submitted.
-- Pending requests can be approved/denied.
-- Risk findings can be remediated.
-- State survives a browser refresh.
-- JSON export/import works.
-- Reset restores the seeded dataset.
+### Single-tenant live deployment
+- The configured tenant's permitted identity can sign in through MSAL.
+- Wrong-tenant accounts are rejected by the live connector.
+- Live Microsoft Graph / ARM results match the signed-in account's actual permissions.
+- Restricted users cannot retrieve privileged data simply by changing the UI.
+- Test SWA `/.auth/me`, protected-route access in a private browser, unauthorized requests, login/logout, and account switching before claiming the hosting gate is enforced.
+- Demo edits never write back to Microsoft Entra ID or Azure.
+- Verify console/network errors and API coverage/permission failures.
 
 ## Portfolio demonstration
 
-For a screen recording, show this sequence:
+Share the **GitHub Pages URL for the interactive demo**. For screenshots or a walkthrough of the actual lab, show authenticated live read-only views from the author's separately hosted Azure deployment, avoiding disclosure of sensitive directory data. Explain clearly which screens show sample data and which show live tenant observations.
 
-1. Open the executive dashboard.
-2. Review an identity with missing MFA.
-3. Inspect Azure RBAC assignments.
-4. Submit an access request.
-5. Approve it from the request queue.
-6. Open Privileged Access and explain eligible vs. active access.
-7. Open Access Reviews.
-8. Remediate an identity-risk finding.
-9. Show the resulting audit-log event.
-10. Briefly explain the production architecture path in Reports & Data.
-
-This sequence demonstrates both the UI and the IAM concepts behind it.
+See [Architecture](ARCHITECTURE.md) and [Security Model](SECURITY.md).
