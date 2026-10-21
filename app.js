@@ -70,7 +70,7 @@ function save(){
   updatePending();
 }
 function user(id){return state.users.find(x=>x.id===id)||{name:"Unknown",upn:""}}
-function badge(text,type="neutral"){return `<span class="badge ${type}">${text}</span>`}
+function badge(text,type="neutral"){const safeType=["neutral","good","bad","warn","blue","purple"].includes(type)?type:"neutral";return `<span class="badge ${safeType}">${esc(text)}</span>`}
 function riskBadge(r){return badge(r,r==="High"?"bad":r==="Medium"?"warn":"good")}
 function statusBadge(s){const m={Active:"good",Approved:"good",Completed:"good",Success:"good",On:"good",Pending:"warn","In progress":"blue",Eligible:"blue","Report-only":"warn",Denied:"bad",Disabled:"neutral",Alert:"bad",Open:"bad"};return badge(s,m[s]||"neutral")}
 function pct(n){return `<div class="progress"><span style="width:${n}%"></span></div>`}
@@ -93,7 +93,7 @@ function dashboard(){
    <div class="section-gap callout">This dashboard models the same governance concerns enterprise IAM teams monitor: authentication coverage, privileged access, entitlement approvals, lifecycle recertification, and policy enforcement.</div>
   </div>
   <div class="card card-pad"><div class="card-header"><div><p class="eyebrow">Priority queue</p><h2>Open risk findings</h2></div><button class="button ghost" onclick="setView('risks')">View all</button></div>
-   <div class="list">${state.risks.filter(x=>x.status==="Open").slice(0,4).map(r=>`<div class="list-item"><div><div style="display:flex;gap:8px;align-items:center"><i class="severity ${r.severity.toLowerCase()}"></i><strong>${r.title}</strong></div><span>${r.entity} · ${r.detail}</span></div>${riskBadge(r.severity)}</div>`).join("")}</div>
+   <div class="list">${state.risks.filter(x=>x.status==="Open").slice(0,4).map(r=>`<div class="list-item"><div><div style="display:flex;gap:8px;align-items:center"><i class="severity ${["High","Medium","Low"].includes(r.severity)?r.severity.toLowerCase():"low"}"></i><strong>${esc(r.title)}</strong></div><span>${esc(r.entity)} · ${esc(r.detail)}</span></div>${riskBadge(r.severity)}</div>`).join("")}</div>
   </div>
  </div>
  ${liveTenantMode?liveDashboardGovernanceSections():`<div class="grid two-col section-gap"><div class="card card-pad"><div class="card-header"><h2>Recent access requests</h2><button class="button ghost" onclick="setView('requests')">Open queue</button></div>${requestTable(state.requests.slice(0,4),false)}</div>
