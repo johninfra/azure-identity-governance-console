@@ -135,8 +135,10 @@
       })).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b)))
     };
   }
-  function loadSnapshot(){try{return JSON.parse(localStorage.getItem(SNAPSHOT_KEY)||'null')}catch{return null}}
-  function saveSnapshot(s){try{localStorage.setItem(SNAPSHOT_KEY,JSON.stringify(s))}catch{}}
+  // Security: historical tenant inventory is in-memory only, never persisted in browser storage.
+  let ephemeralSnapshot=null;
+  function loadSnapshot(){return ephemeralSnapshot}
+  function saveSnapshot(s){ephemeralSnapshot=s}
   function arrayDiff(a,b){const A=new Set(a||[]),B=new Set(b||[]);return {added:[...B].filter(x=>!A.has(x)),removed:[...A].filter(x=>!B.has(x))}}
   function rbacKey(r){return [r.principal,r.role,r.scope,r.source].map(norm).join('|')}
 
