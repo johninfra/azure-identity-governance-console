@@ -128,7 +128,7 @@ function roles(){
  return tablePage("Azure RBAC assignments","Review principal, role, scope, assignment source, and privilege level.",["Principal","Role","Scope","Source","Classification"],rows)
 }
 function requestTable(items,actions=true){
- return `<div class="table-wrap"><table><thead><tr><th>Request</th><th>Identity</th><th>Access</th><th>Scope</th><th>Duration</th><th>Status</th>${actions?"<th>Decision</th>":""}</tr></thead><tbody>${items.map(r=>`<tr><td class="name-cell"><strong>${r.id}</strong><span>${r.submitted}</span></td><td>${user(r.userId).name}</td><td>${r.role}</td><td>${r.scope}</td><td>${r.duration}</td><td>${statusBadge(r.status)}</td>${actions?`<td>${r.status==="Pending"?`<button class="button primary" onclick="decide('${r.id}','Approved')">Approve</button> <button class="button danger" onclick="decide('${r.id}','Denied')">Deny</button>`:"—"}</td>`:""}</tr>`).join("")}</tbody></table></div>`
+ return `<div class="table-wrap"><table><thead><tr><th>Request</th><th>Identity</th><th>Access</th><th>Scope</th><th>Duration</th><th>Status</th>${actions?"<th>Decision</th>":""}</tr></thead><tbody>${items.map(r=>`<tr><td class="name-cell"><strong>${esc(r.id)}</strong><span>${esc(r.submitted)}</span></td><td>${esc(user(r.userId).name)}</td><td>${esc(r.role)}</td><td>${esc(r.scope)}</td><td>${esc(r.duration)}</td><td>${statusBadge(r.status)}</td>${actions?`<td>${r.status==="Pending"?`<button class="button primary" onclick="decide('${esc(r.id)}','Approved')">Approve</button> <button class="button danger" onclick="decide('${esc(r.id)}','Denied')">Deny</button>`:"—"}</td>`:""}</tr>`).join("")}</tbody></table></div>`
 }
 function requests(){
  return `<div class="card card-pad"><div class="toolbar"><div><p class="eyebrow">Entitlement workflow</p><h2 style="margin:4px 0">Access request queue</h2><div class="muted" style="font-size:12px">Simulated manager/security approval workflow with audit logging.</div></div><button class="button primary" onclick="openRequest()">+ New request</button></div>${requestTable(filtered(state.requests))}</div>`
@@ -142,7 +142,7 @@ function reviews(){
  return `<div class="grid three-col">${cards}</div>`
 }
 function risks(){
- const rows=filtered(state.risks).map(r=>`<tr><td>${riskBadge(r.severity)}</td><td class="name-cell"><strong>${r.title}</strong><span>${r.detail}</span></td><td>${r.entity}</td><td>${statusBadge(r.status)}</td><td>${r.status==="Open"?`<button class="button secondary" onclick="remediate('${r.id}')">Mark remediated</button>`:"—"}</td></tr>`).join("");
+ const rows=filtered(state.risks).map(r=>`<tr><td>${riskBadge(r.severity)}</td><td class="name-cell"><strong>${esc(r.title)}</strong><span>${esc(r.detail)}</span></td><td>${r.entity}</td><td>${statusBadge(r.status)}</td><td>${r.status==="Open"?`<button class="button secondary" onclick="remediate('${esc(r.id)}')">Mark remediated</button>`:"—"}</td></tr>`).join("");
  return tablePage("Identity risk register","Prioritized IAM findings that model common governance and hygiene issues.",["Severity","Finding","Entity","Status","Action"],rows)
 }
 function policies(){
@@ -178,7 +178,7 @@ function tablePage(title,desc,heads,rows){return `<div class="card card-pad"><di
 function render(){const fn={dashboard,identities,groups,roles,requests,privileged,reviews,risks,policies,audit,reports}[currentView];el("content").innerHTML=fn();updatePending()}
 function decide(id,status){const r=state.requests.find(x=>x.id===id);if(!r)return;r.status=status;state.audit.unshift({time:"Now",actor:"John Tyler",action:`Access request ${status.toLowerCase()}`,target:id,result:status==="Approved"?"Success":"Alert"});save();render();toast(`${id} ${status.toLowerCase()}`,status==="Approved"?"good":"bad")}
 function remediate(id){const r=state.risks.find(x=>x.id===id);r.status="Remediated";state.audit.unshift({time:"Now",actor:"John Tyler",action:"Risk finding remediated",target:r.entity,result:"Success"});save();render();toast("Risk marked remediated")}
-function openRequest(){el("requestUser").innerHTML=state.users.filter(x=>x.status==="Active").map(x=>`<option value="${x.id}">${x.name} — ${x.dept}</option>`).join("");el("requestModal").classList.remove("hidden")}
+function openRequest(){el("requestUser").innerHTML=state.users.filter(x=>x.status==="Active").map(x=>`<option value="${esc(x.id)}">${esc(x.name)} — ${esc(x.dept)}</option>`).join("");el("requestModal").classList.remove("hidden")}
 function closeRequest(){el("requestModal").classList.add("hidden")}
 function exportData(){const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="identity-governance-demo.json";a.click();URL.revokeObjectURL(a.href);toast("Governance data exported")}
 function importData(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const data=JSON.parse(r.result);if(!data.users||!data.requests)throw new Error();state=data;save();render();toast("Governance data imported")}catch{toast("Invalid governance JSON","bad")}};r.readAsText(f)}
@@ -1161,7 +1161,7 @@ function risks(){
     <td>${riskStatusBadge(r.status)}</td>
     <td class="actions-cell">
       <button class="button secondary" onclick="openRiskEditor('${r.id}')">Edit</button>
-      ${r.status==="Open"?`<button class="button ghost" onclick="remediate('${r.id}')">Remediate</button>`:""}
+      ${r.status==="Open"?`<button class="button ghost" onclick="remediate('${esc(r.id)}')">Remediate</button>`:""}
       <button class="button danger" onclick="deleteRiskFinding('${r.id}')">Delete</button>
     </td>
   </tr>`).join("");
