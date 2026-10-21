@@ -28,7 +28,7 @@
     {
       "route": "/*",
       "allowedRoles": [
-        "governance_reader"
+        "authenticated"
       ]
     }
   ],
