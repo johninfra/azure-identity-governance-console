@@ -22,3 +22,9 @@ This branch contains **partial defense-in-depth changes**, not enterprise produc
 
 ## Important
 Do not connect an employer's tenant to this project until the organization's authorized security team has approved the app and the release blockers above have been resolved and tested.
+
+## Phase 2: source-side controls
+- Encoded additional request/risk data fields and dynamic request IDs in HTML templates to reduce demo JSON-import XSS exposure.
+- Restricted Graph pagination to HTTPS requests on the expected Microsoft Graph origin before attaching delegated bearer tokens. This prevents an unexpected nextLink from redirecting a Graph access token to another host.
+- Expanded static regressions to verify these source-level controls.
+- **Still outstanding:** Replace inline event attributes and use DOM-safe construction; a systematic runtime XSS suite, app-role authorization and live tenant consent testing remain mandatory.
