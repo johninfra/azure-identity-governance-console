@@ -15,7 +15,11 @@ assert.deepEqual(config.routes[0].allowedRoles,['authenticated']); // Preserve t
 assert.ok(config.globalHeaders['X-Content-Type-Options']==='nosniff');
 assert.ok(config.globalHeaders['X-Frame-Options']==='DENY');
 assert.match(live,/cacheLocation: "sessionStorage"/);
-assert.match(live,/endpoint\.origin !== new URL\(GRAPH\)\.origin/);
+// Pagination must stay on the origin of the initial trusted API request (Graph or ARM).
+assert.match(live,/const initial = new URL\(requireTrustedEndpoint\(url\)\)/);
+assert.match(live,/endpoint\.origin !== trustedOrigin/);
+assert.match(live,/endpoint\.username \|\| endpoint\.password/);
+assert.match(live,/visited\.has\(endpoint\.href\)/);
 assert.match(app,/\$\{esc\(r\.role\)\}/);
 assert.match(app,/\$\{esc\(r\.scope\)\}/);
 assert.match(live,/redirect: "error"/);
