@@ -19,6 +19,7 @@ assert.match(app,/\$\{esc\(r\.role\)\}/);
 assert.match(app,/\$\{esc\(r\.scope\)\}/);
 assert.match(live,/redirect: "error"/);
 assert.match(live,/requireTrustedEndpoint\(url\)/);
-assert.match(live,/account\.tenantId\?\.toLowerCase\(\) === TENANT_ID\.toLowerCase\(\)/);
+assert.match(live,/a\.tenantId\?\.toLowerCase\(\) === TENANT_ID\.toLowerCase\(\)/);
+assert.match(live,/account\?\.tenantId\?\.toLowerCase\(\) !== TENANT_ID\.toLowerCase\(\)/);
 assert.ok(config.globalHeaders['Content-Security-Policy-Report-Only']);
 console.log('Static security regression checks passed; authorization remains a deployment blocker.');
