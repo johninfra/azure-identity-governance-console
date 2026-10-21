@@ -81,13 +81,20 @@
 
   async function paged(url, token, max = Infinity) {
     const rows = [];
-    let next = url;
+    const initial = new URL(requireTrustedEndpoint(url));
+    // API pagination may remain on Microsoft Graph or Azure Resource Manager,
+    // but never send a delegated bearer token across API origins.
+    const trustedOrigin = initial.origin;
+    let next = initial.href;
+    const visited = new Set();
     while (next && rows.length < max) {
-      // Never forward an access token to an untrusted pagination URL.
-      const endpoint = new URL(next, GRAPH);
-      if (endpoint.origin !== new URL(GRAPH).origin || endpoint.protocol !== "https:") {
-        throw new Error("Blocked unexpected Microsoft Graph pagination URL.");
+      const endpoint = new URL(next, initial.href);
+      if (endpoint.protocol !== "https:" || endpoint.origin !== trustedOrigin ||
+          endpoint.username || endpoint.password) {
+        throw new Error("Blocked unexpected API pagination URL.");
       }
+      if (visited.has(endpoint.href)) throw new Error("Blocked repeated API pagination URL.");
+      visited.add(endpoint.href);
       const body = await api(endpoint.href, token);
       rows.push(...(body.value || []));
       next = body["@odata.nextLink"] || body.nextLink || null;
