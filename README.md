@@ -240,3 +240,5 @@ The application is intended to demonstrate understanding of:
 ## Author
 
 Built by John Tyler as part of an Azure, IAM, systems administration, and cybersecurity portfolio.
+
+<!-- Redeployment trigger: live governance dashboard update (2026-10-21). -->
