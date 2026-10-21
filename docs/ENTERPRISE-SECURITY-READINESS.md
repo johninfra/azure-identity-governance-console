@@ -34,3 +34,9 @@ Do not connect an employer's tenant to this project until the organization's aut
 - Selects MSAL cached accounts only from the configured tenant and rejects cross-tenant interactive logins before acquiring tokens.
 - Adds a **report-only** Content Security Policy as an initial compatibility baseline. This policy is intentionally not enforced and still contains unsafe-inline due to current inline event handlers and style attributes; it must be tightened and browser-tested before production.
 - These controls do not replace Azure Static Web Apps application-level authorization. Restrict enterprise app assignment (including guest permissions), design dedicated app roles, test deny cases, and secure every future backend API separately.
+
+## Phase 4: legacy demo rendering and authorization gate
+- Escapes the remaining legacy risk-table entity cell that can render imported JSON state.
+- Restricts legacy action-handler record IDs to a simple identifier alphabet so HTML escaping cannot be mistaken for JavaScript-string safety.
+- Added regression assertions. These are selective mitigations; a full removal of inline event handlers is still necessary to implement a strict enforced CSP.
+- **Authorization gate is still open:** The host's `authenticated` role is insufficient to prove a user is a designated governance reader. Rather than enforcing an arbitrary role and locking out the live application, production access remains blocked pending admin-approved Entra app assignment and verifiable role enforcement.
