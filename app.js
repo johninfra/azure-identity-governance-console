@@ -75,8 +75,8 @@ function riskBadge(r){return badge(r,r==="High"?"bad":r==="Medium"?"warn":"good"
 function statusBadge(s){const m={Active:"good",Approved:"good",Completed:"good",Success:"good",On:"good",Pending:"warn","In progress":"blue",Eligible:"blue","Report-only":"warn",Denied:"bad",Disabled:"neutral",Alert:"bad",Open:"bad"};return badge(s,m[s]||"neutral")}
 function pct(n){return `<div class="progress"><span style="width:${n}%"></span></div>`}
 function toast(msg,type="good"){const d=document.createElement("div");d.className=`toast ${type}`;d.textContent=msg;el("toastStack").appendChild(d);setTimeout(()=>d.remove(),2800)}
-function updatePending(){const n=state.requests.filter(x=>x.status==="Pending").length;el("pendingNavCount").textContent=n}
-function titles(v){return {dashboard:"Executive Dashboard",identities:"Identity Directory",groups:"Groups & Membership",roles:"Roles & Azure RBAC",requests:"Access Requests",privileged:"Privileged Identity Management",reviews:"Access Reviews",risks:"Identity Risk",policies:"Conditional Access",audit:"Audit Logs",reports:"Reports & Data"}[v]}
+function updatePending(){/* Access Activity has no pending-request count badge. */}
+function titles(v){return {dashboard:"Executive Dashboard",identities:"Identity Directory",groups:"Groups & Membership",roles:"Roles & Azure RBAC",requests:"Access Activity",privileged:"Privileged Identity Management",reviews:"Access Reviews",risks:"Identity Risk",policies:"Conditional Access",audit:"Audit Logs",reports:"Reports & Data"}[v]}
 function setView(v){currentView=v;document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active",b.dataset.view===v));el("pageTitle").textContent=titles(v);el("globalSearch").value="";searchTerm="";render();el("sidebar").classList.remove("open")}
 function filtered(arr){if(!searchTerm)return arr;const q=searchTerm.toLowerCase();return arr.filter(x=>JSON.stringify(x).toLowerCase().includes(q))}
 function dashboard(){
