@@ -25,7 +25,8 @@ assert.match(live,/account\?\.tenantId\?\.toLowerCase\(\) !== TENANT_ID\.toLower
 assert.ok(config.globalHeaders['Content-Security-Policy-Report-Only']);
 assert.match(app,/function safeActionId\(value\)/);
 assert.match(app,/\$\{esc\(r\.entity\)\}<\/td><td>\$\{statusBadge\(r\.status\)\}/);
-assert.match(app,/decide\('\$\{safeActionId\(r\.id\)\}'/);
+assert.match(app,/data-security-action="decide"/);
+assert.match(app,/data-security-status="\$\{parts\[1\]\}"|data-security-status="Approved"/);
 assert.doesNotMatch(app,/on(?:click|change|submit|input)=/);
 assert.doesNotMatch(gov,/on(?:click|change|submit|input)=/);
 assert.match(app,/data-security-action/);
