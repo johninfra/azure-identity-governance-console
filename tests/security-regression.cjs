@@ -22,4 +22,7 @@ assert.match(live,/requireTrustedEndpoint\(url\)/);
 assert.match(live,/a\.tenantId\?\.toLowerCase\(\) === TENANT_ID\.toLowerCase\(\)/);
 assert.match(live,/account\?\.tenantId\?\.toLowerCase\(\) !== TENANT_ID\.toLowerCase\(\)/);
 assert.ok(config.globalHeaders['Content-Security-Policy-Report-Only']);
+assert.match(app,/function safeActionId\(value\)/);
+assert.match(app,/\$\{esc\(r\.entity\)\}<\/td><td>\$\{statusBadge\(r\.status\)\}/);
+assert.match(app,/decide\('\$\{safeActionId\(r\.id\)\}'/);
 console.log('Static security regression checks passed; authorization remains a deployment blocker.');
