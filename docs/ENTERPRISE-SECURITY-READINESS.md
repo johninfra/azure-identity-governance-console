@@ -46,3 +46,10 @@ Do not connect an employer's tenant to this project until the organization's aut
 - Tightened report-only CSP script-src to remove unsafe-inline (still not enforced; browser integration tests pending).
 - Style attributes remain inline, so style-src still allows unsafe-inline. A strict enforced CSP requires testing MSAL, dynamic styles, and all interface interactions.
 - The handler dispatcher is deliberately constrained to existing known functions and approved decision states; verify all demo and live interactions in a browser before merging.
+
+## Phase 6 — fail-closed hosting authorization (staged; NOT ready to merge)
+- Azure Static Web Apps route `/*` now requires the custom **SWA** role `governance_reader` instead of the broad `authenticated` role. The access-denied page is deliberately static and contains no tenant data.
+- **Important:** This is an Azure Static Web Apps custom-role name, not automatically an Entra app role or directory role. The organization must configure trusted role assignment (e.g., SWA custom authentication role assignment function where supported, or an approved identity-to-SWA-role mechanism). Simply creating an Entra app role does **not** automatically satisfy this check.
+- Without this trusted role-assignment configuration, legitimate users including the lab owner will receive HTTP 403: this intentional fail-closed behavior prevents accidental deployment with authenticated-user access.
+- Test anonymous access, authenticated user without role, valid governance reader, cross-tenant login, logout/session revocation, and protected deep routes in a staging deployment before merging.
+- Client-side roles or JavaScript-only checks do not replace hosting/API enforcement. Review SWA route matching and custom auth behavior against current Microsoft documentation before release.
