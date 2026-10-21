@@ -28,3 +28,9 @@ Do not connect an employer's tenant to this project until the organization's aut
 - Restricted Graph pagination to HTTPS requests on the expected Microsoft Graph origin before attaching delegated bearer tokens. This prevents an unexpected nextLink from redirecting a Graph access token to another host.
 - Expanded static regressions to verify these source-level controls.
 - **Still outstanding:** Replace inline event attributes and use DOM-safe construction; a systematic runtime XSS suite, app-role authorization and live tenant consent testing remain mandatory.
+
+## Phase 3: browser and API boundary protections
+- Validates Graph/ARM fetch target origin against explicit HTTPS allowlist before attaching a bearer token; rejects redirects rather than following them.
+- Selects MSAL cached accounts only from the configured tenant and rejects cross-tenant interactive logins before acquiring tokens.
+- Adds a **report-only** Content Security Policy as an initial compatibility baseline. This policy is intentionally not enforced and still contains unsafe-inline due to current inline event handlers and style attributes; it must be tightened and browser-tested before production.
+- These controls do not replace Azure Static Web Apps application-level authorization. Restrict enterprise app assignment (including guest permissions), design dedicated app roles, test deny cases, and secure every future backend API separately.
