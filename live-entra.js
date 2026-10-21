@@ -71,7 +71,12 @@
     const rows = [];
     let next = url;
     while (next && rows.length < max) {
-      const body = await api(next, token);
+      // Never forward an access token to an untrusted pagination URL.
+      const endpoint = new URL(next, GRAPH);
+      if (endpoint.origin !== new URL(GRAPH).origin || endpoint.protocol !== "https:") {
+        throw new Error("Blocked unexpected Microsoft Graph pagination URL.");
+      }
+      const body = await api(endpoint.href, token);
       rows.push(...(body.value || []));
       next = body["@odata.nextLink"] || body.nextLink || null;
     }
