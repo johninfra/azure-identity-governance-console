@@ -2,7 +2,7 @@
 
 A browser-based Microsoft Entra ID and Azure governance lab that combines a **simulated IAM operations console** with an optional **read-only Live Tenant connection**. It demonstrates identity lifecycle concepts, group and role governance, Azure RBAC, privileged access, access reviews, Conditional Access, audit activity, and permission-aware Microsoft cloud API integration.
 
-> **Scope:** Portfolio/lab project, not a production IAM management platform. The demo's editable records are simulated. The live connection is read-only and currently configured for one lab tenant.
+> **Scope:** Personal, single-tenant IAM portfolio/lab project, not a production IAM management platform. The GitHub Pages link is **demo-only**: it uses sample data and does **not** allow Microsoft Entra authentication or live tenant connections. The separately hosted Azure Static Web Apps deployment supports a read-only live connection to the author's specifically configured Entra lab tenant. Simulated edits never write to Azure.
 
 ## Capabilities
 
@@ -20,8 +20,8 @@ Unavailable, unauthorized, or unlicensed data is not evidence that a tenant has 
 
 ## Deployment
 
-- **GitHub Pages:** public portfolio/demo application with sample records.
-- **Azure Static Web Apps:** hosted application with an optional **Connect Live Tenant** workflow using Microsoft Entra ID and delegated Microsoft Graph / Azure Resource Manager API access.
+- **GitHub Pages:** [public interactive demo](https://johninfra.github.io/azure-identity-governance-console/) with fictional sample records only. `live-entra.js` explicitly disables live sign-in on `github.io` (and `file:`). Visitors cannot authenticate or connect any tenant from the Pages URL.
+- **Azure Static Web Apps:** separate, tenant-specific live hosting path, configured to authenticate against the author's Entra lab tenant. Its optional **Connect Live Tenant** workflow requests delegated Microsoft Graph / Azure Resource Manager read access based on the signed-in identity and granted permissions; it does not support arbitrary outside tenants.
 - **GitHub Actions:** deploys `main` to Azure Static Web Apps and runs static security checks. A successful deployment does not itself prove browser authentication or end-user authorization.
 
 ### Authentication and authorization — important distinction
@@ -86,7 +86,7 @@ The [Static security checks](.github/workflows/security-checks.yml) workflow and
 
 Before treating hosting authentication or per-user data segregation as validated, test a new private-browser session against the actual Azure deployment: login and logout, `/.auth/me`, unauthorized requests, and role-appropriate Graph/ARM read visibility with admin and restricted test identities. Inspect browser console/network failures, verify stale demo data is clearly separated from live data, and test XSS and tenant isolation. Do not claim employer readiness or multi-tenant capability solely from successful CI.
 
-Additional limitations and review items are recorded in [Enterprise Security Readiness](docs/ENTERPRISE-SECURITY-READINESS.md).
+See [Architecture](docs/ARCHITECTURE.md), [Deployment](docs/DEPLOYMENT.md), and [Security Model](docs/SECURITY.md) for the public-demo versus private live-tenant boundaries.
 
 ## Development
 
