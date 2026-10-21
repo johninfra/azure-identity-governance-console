@@ -28,7 +28,7 @@
     {
       "route": "/*",
       "allowedRoles": [
-        "authenticated"
+        "governance_reader"
       ]
     }
   ],
@@ -36,6 +36,10 @@
     "401": {
       "statusCode": 302,
       "redirect": "/.auth/login/entra"
+    },
+    "403": {
+      "rewrite": "/access-denied.html",
+      "statusCode": 403
     }
   },
   "globalHeaders": {
