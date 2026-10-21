@@ -40,3 +40,9 @@ Do not connect an employer's tenant to this project until the organization's aut
 - Restricts legacy action-handler record IDs to a simple identifier alphabet so HTML escaping cannot be mistaken for JavaScript-string safety.
 - Added regression assertions. These are selective mitigations; a full removal of inline event handlers is still necessary to implement a strict enforced CSP.
 - **Authorization gate is still open:** The host's `authenticated` role is insufficient to prove a user is a designated governance reader. Rather than enforcing an arbitrary role and locking out the live application, production access remains blocked pending admin-approved Entra app assignment and verifiable role enforcement.
+
+## Phase 5: CSP-compatible event delegation
+- Converted 33 inline event handler occurrences into declarative data attributes with a centralized allowlisted dispatcher.
+- Tightened report-only CSP script-src to remove unsafe-inline (still not enforced; browser integration tests pending).
+- Style attributes remain inline, so style-src still allows unsafe-inline. A strict enforced CSP requires testing MSAL, dynamic styles, and all interface interactions.
+- The handler dispatcher is deliberately constrained to existing known functions and approved decision states; verify all demo and live interactions in a browser before merging.
