@@ -244,3 +244,8 @@ Built by John Tyler as part of an Azure, IAM, systems administration, and cybers
 <!-- Redeployment trigger: live governance dashboard update (2026-10-21). -->
 
 <!-- Redeployment retry after corrected GitHub Actions allowlist (2026-10-21). -->
+
+
+## October 2026 security review: deployment caution
+
+The `enterprise-security-hardening` pull request includes JavaScript hardening and regression checks, but its staged `governance_reader` Static Web Apps role requirement is not verified. Do not merge or deploy that authorization change until it is reconciled with the app's actual authentication mode and tested against authorized and unauthorized users. The application currently supports delegated MSAL sign-in for live Microsoft Graph / Azure Resource Manager data in its configured lab tenant; this does not automatically establish an Azure Static Web Apps `/.auth/me` session. The static demo shell must not be represented as private merely because Microsoft Graph requires authentication. Cross-organization use and directory-role-based dashboard visibility require additional independent validation. Review `docs/ENTERPRISE-SECURITY-READINESS.md` before any production deployment.
