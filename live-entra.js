@@ -46,8 +46,20 @@
     return parts.join(" | ") || String(e || "Unknown error");
   };
 
+  function requireTrustedEndpoint(url) {
+    const endpoint = new URL(url);
+    if (endpoint.protocol !== "https:" ||
+        ![new URL(GRAPH).origin, new URL(ARM).origin].includes(endpoint.origin) ||
+        endpoint.username || endpoint.password) {
+      throw new Error("Blocked unauthorized API endpoint.");
+    }
+    return endpoint.href;
+  }
+
   async function api(url, token) {
-    const res = await fetch(url, {
+    const safeUrl = requireTrustedEndpoint(url);
+    const res = await fetch(safeUrl, {
+      redirect: "error",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }
     });
     if (!res.ok) {
@@ -71,7 +83,12 @@
     const rows = [];
     let next = url;
     while (next && rows.length < max) {
-      const body = await api(next, token);
+      // Never forward an access token to an untrusted pagination URL.
+      const endpoint = new URL(next, GRAPH);
+      if (endpoint.origin !== new URL(GRAPH).origin || endpoint.protocol !== "https:") {
+        throw new Error("Blocked unexpected Microsoft Graph pagination URL.");
+      }
+      const body = await api(endpoint.href, token);
       rows.push(...(body.value || []));
       next = body["@odata.nextLink"] || body.nextLink || null;
     }
@@ -132,7 +149,7 @@
         try { await msalInstance.handleRedirectPromise(); } catch {}
       }
     }
-    account = msalInstance.getAllAccounts()[0] || account;
+    account = msalInstance.getAllAccounts().find(a => a.tenantId?.toLowerCase() === TENANT_ID.toLowerCase()) || null;
     return msalInstance;
   }
 
@@ -142,6 +159,7 @@
       const login = await instance.loginPopup({ scopes: ["User.Read"], prompt: "select_account" });
       account = login.account;
     }
+    if (account?.tenantId?.toLowerCase() !== TENANT_ID.toLowerCase()) throw new Error("Signed-in account is not in the configured tenant.");
     const req = { scopes, account };
     try {
       return (await instance.acquireTokenSilent(req)).accessToken;
@@ -153,7 +171,7 @@
   async function acquireOptionalSilent(scopes, config) {
     try {
       const instance = await ensureMsal(config);
-      if (!account) return null;
+      if (!account || account.tenantId?.toLowerCase() !== TENANT_ID.toLowerCase()) return null;
       return (await instance.acquireTokenSilent({ scopes, account })).accessToken;
     } catch {
       return null;

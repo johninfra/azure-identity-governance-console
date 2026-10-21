@@ -70,7 +70,7 @@ function save(){
   updatePending();
 }
 function user(id){return state.users.find(x=>x.id===id)||{name:"Unknown",upn:""}}
-function badge(text,type="neutral"){return `<span class="badge ${type}">${text}</span>`}
+function badge(text,type="neutral"){const safeType=["neutral","good","bad","warn","blue","purple"].includes(type)?type:"neutral";return `<span class="badge ${safeType}">${esc(text)}</span>`}
 function riskBadge(r){return badge(r,r==="High"?"bad":r==="Medium"?"warn":"good")}
 function statusBadge(s){const m={Active:"good",Approved:"good",Completed:"good",Success:"good",On:"good",Pending:"warn","In progress":"blue",Eligible:"blue","Report-only":"warn",Denied:"bad",Disabled:"neutral",Alert:"bad",Open:"bad"};return badge(s,m[s]||"neutral")}
 function pct(n){return `<div class="progress"><span style="width:${n}%"></span></div>`}
@@ -92,11 +92,11 @@ function dashboard(){
    <div class="stat-strip"><div class="mini-stat"><strong>${mfa}%</strong><span>MFA adoption</span></div><div class="mini-stat"><strong>${state.pim.filter(x=>x.state==="Eligible").length}</strong><span>PIM eligible</span></div>${liveTenantMode?`<div class="mini-stat"><strong>—</strong><span>Review campaigns not queried</span></div>`:`<div class="mini-stat"><strong>${state.reviews.filter(x=>x.status==="In progress").length}</strong><span>Active reviews</span></div>`}<div class="mini-stat"><strong>${state.policies.filter(x=>x.state==="On").length}</strong><span>CA policies enforced</span></div></div>
    <div class="section-gap callout">This dashboard models the same governance concerns enterprise IAM teams monitor: authentication coverage, privileged access, entitlement approvals, lifecycle recertification, and policy enforcement.</div>
   </div>
-  <div class="card card-pad"><div class="card-header"><div><p class="eyebrow">Priority queue</p><h2>Open risk findings</h2></div><button class="button ghost" onclick="setView('risks')">View all</button></div>
-   <div class="list">${state.risks.filter(x=>x.status==="Open").slice(0,4).map(r=>`<div class="list-item"><div><div style="display:flex;gap:8px;align-items:center"><i class="severity ${r.severity.toLowerCase()}"></i><strong>${r.title}</strong></div><span>${r.entity} · ${r.detail}</span></div>${riskBadge(r.severity)}</div>`).join("")}</div>
+  <div class="card card-pad"><div class="card-header"><div><p class="eyebrow">Priority queue</p><h2>Open risk findings</h2></div><button class="button ghost" data-security-action="setView" data-security-arg="risks">View all</button></div>
+   <div class="list">${state.risks.filter(x=>x.status==="Open").slice(0,4).map(r=>`<div class="list-item"><div><div style="display:flex;gap:8px;align-items:center"><i class="severity ${["High","Medium","Low"].includes(r.severity)?r.severity.toLowerCase():"low"}"></i><strong>${esc(r.title)}</strong></div><span>${esc(r.entity)} · ${esc(r.detail)}</span></div>${riskBadge(r.severity)}</div>`).join("")}</div>
   </div>
  </div>
- ${liveTenantMode?liveDashboardGovernanceSections():`<div class="grid two-col section-gap"><div class="card card-pad"><div class="card-header"><h2>Recent access requests</h2><button class="button ghost" onclick="setView('requests')">Open queue</button></div>${requestTable(state.requests.slice(0,4),false)}</div>
+ ${liveTenantMode?liveDashboardGovernanceSections():`<div class="grid two-col section-gap"><div class="card card-pad"><div class="card-header"><h2>Recent access requests</h2><button class="button ghost" data-security-action="setView" data-security-arg="requests">Open queue</button></div>${requestTable(state.requests.slice(0,4),false)}</div>
  <div class="card card-pad"><div class="card-header"><h2>Access review progress</h2></div><div class="list">${state.reviews.map(r=>`<div class="list-item"><div style="flex:1"><strong>${r.name}</strong><span>${r.progress}% complete · Due ${r.due}</span><div style="margin-top:8px">${pct(r.progress)}</div></div>${statusBadge(r.status)}</div>`).join("")}</div></div></div>`}`
 }
 // Live dashboard summaries intentionally never use demo request or review arrays.
@@ -108,10 +108,10 @@ function liveDashboardGovernanceSections(){
  }).slice(0,4);
  const rows=events.map(a=>`<tr><td>${esc(a.time||"—")}</td><td>${esc(a.actor||"—")}</td><td>${esc(a.activity||"—")}</td><td>${esc(a.target||"—")}</td><td>${statusBadge(a.result||"Unknown")}</td></tr>`).join("");
  return `<div class="grid two-col section-gap">
- <div class="card card-pad"><div class="card-header"><h2>Recent access activity</h2><button class="button ghost" onclick="setView('requests')">View events</button></div>
+ <div class="card card-pad"><div class="card-header"><h2>Recent access activity</h2><button class="button ghost" data-security-action="setView" data-security-arg="requests">View events</button></div>
  <p class="muted">Read-only Microsoft Entra directory audit events, not submitted approval requests.</p>
  <div class="table-wrap"><table><thead><tr><th>Time</th><th>Actor</th><th>Activity</th><th>Target</th><th>Result</th></tr></thead><tbody>${rows||'<tr><td colspan="5" class="empty">No access-related audit events were returned for this tenant in the current window.</td></tr>'}</tbody></table></div></div>
- <div class="card card-pad"><div class="card-header"><h2>Access review candidates</h2><button class="button ghost" onclick="setView('reviews')">View candidates</button></div>
+ <div class="card card-pad"><div class="card-header"><h2>Access review candidates</h2><button class="button ghost" data-security-action="setView" data-security-arg="reviews">View candidates</button></div>
  <div class="callout">The Access Reviews page generates read-only recertification candidates from authenticated tenant data. Actual Entra Access Review campaigns, completion percentages, and due dates are not queried; no review progress is claimed here.</div>
  </div></div>`;
 }
@@ -128,10 +128,10 @@ function roles(){
  return tablePage("Azure RBAC assignments","Review principal, role, scope, assignment source, and privilege level.",["Principal","Role","Scope","Source","Classification"],rows)
 }
 function requestTable(items,actions=true){
- return `<div class="table-wrap"><table><thead><tr><th>Request</th><th>Identity</th><th>Access</th><th>Scope</th><th>Duration</th><th>Status</th>${actions?"<th>Decision</th>":""}</tr></thead><tbody>${items.map(r=>`<tr><td class="name-cell"><strong>${r.id}</strong><span>${r.submitted}</span></td><td>${user(r.userId).name}</td><td>${r.role}</td><td>${r.scope}</td><td>${r.duration}</td><td>${statusBadge(r.status)}</td>${actions?`<td>${r.status==="Pending"?`<button class="button primary" onclick="decide('${r.id}','Approved')">Approve</button> <button class="button danger" onclick="decide('${r.id}','Denied')">Deny</button>`:"—"}</td>`:""}</tr>`).join("")}</tbody></table></div>`
+ return `<div class="table-wrap"><table><thead><tr><th>Request</th><th>Identity</th><th>Access</th><th>Scope</th><th>Duration</th><th>Status</th>${actions?"<th>Decision</th>":""}</tr></thead><tbody>${items.map(r=>`<tr><td class="name-cell"><strong>${esc(r.id)}</strong><span>${esc(r.submitted)}</span></td><td>${esc(user(r.userId).name)}</td><td>${esc(r.role)}</td><td>${esc(r.scope)}</td><td>${esc(r.duration)}</td><td>${statusBadge(r.status)}</td>${actions?`<td>${r.status==="Pending"?`<button class="button primary" data-security-action="decide" data-security-arg="${safeActionId(r.id)}" data-security-status="Approved">Approve</button> <button class="button danger" data-security-action="decide" data-security-arg="${safeActionId(r.id)}" data-security-status="Denied">Deny</button>`:"—"}</td>`:""}</tr>`).join("")}</tbody></table></div>`
 }
 function requests(){
- return `<div class="card card-pad"><div class="toolbar"><div><p class="eyebrow">Entitlement workflow</p><h2 style="margin:4px 0">Access request queue</h2><div class="muted" style="font-size:12px">Simulated manager/security approval workflow with audit logging.</div></div><button class="button primary" onclick="openRequest()">+ New request</button></div>${requestTable(filtered(state.requests))}</div>`
+ return `<div class="card card-pad"><div class="toolbar"><div><p class="eyebrow">Entitlement workflow</p><h2 style="margin:4px 0">Access request queue</h2><div class="muted" style="font-size:12px">Simulated manager/security approval workflow with audit logging.</div></div><button class="button primary" data-security-action="openRequest">+ New request</button></div>${requestTable(filtered(state.requests))}</div>`
 }
 function privileged(){
  const rows=filtered(state.pim).map(p=>`<tr><td>${p.user}</td><td>${p.role}</td><td>${p.scope}</td><td>${statusBadge(p.state)}</td><td>${p.max}</td><td>${p.mfa?badge("Required","good"):"No"}</td><td>${p.approval?badge("Required","blue"):"No"}</td><td>${p.expires}</td></tr>`).join("");
@@ -142,7 +142,7 @@ function reviews(){
  return `<div class="grid three-col">${cards}</div>`
 }
 function risks(){
- const rows=filtered(state.risks).map(r=>`<tr><td>${riskBadge(r.severity)}</td><td class="name-cell"><strong>${r.title}</strong><span>${r.detail}</span></td><td>${r.entity}</td><td>${statusBadge(r.status)}</td><td>${r.status==="Open"?`<button class="button secondary" onclick="remediate('${r.id}')">Mark remediated</button>`:"—"}</td></tr>`).join("");
+ const rows=filtered(state.risks).map(r=>`<tr><td>${riskBadge(r.severity)}</td><td class="name-cell"><strong>${esc(r.title)}</strong><span>${esc(r.detail)}</span></td><td>${esc(r.entity)}</td><td>${statusBadge(r.status)}</td><td>${r.status==="Open"?`<button class="button secondary" data-security-action="remediate" data-security-arg="${safeActionId(r.id)}">Mark remediated</button>`:"—"}</td></tr>`).join("");
  return tablePage("Identity risk register","Prioritized IAM findings that model common governance and hygiene issues.",["Severity","Finding","Entity","Status","Action"],rows)
 }
 function policies(){
@@ -170,7 +170,7 @@ function audit(){
  return tablePage("Audit log","Immutable-style local event history for governance actions in this demo.",["Time","Actor","Activity","Target","Result"],rows)
 }
 function reports(){
- return `<div class="grid two-col"><div class="card card-pad"><p class="eyebrow">Portable demo data</p><h2>Export / import governance state</h2><p class="muted" style="font-size:12px;line-height:1.6">This static deployment intentionally stores data in your browser. Exporting JSON lets you preserve or move demo state without a backend.</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="button primary" onclick="exportData()">Export JSON</button><label class="button secondary" style="cursor:pointer">Import JSON<input id="importFile" type="file" accept="application/json" hidden onchange="importData(event)"></label><button class="button danger" onclick="resetData()">Reset demo</button></div></div>
+ return `<div class="grid two-col"><div class="card card-pad"><p class="eyebrow">Portable demo data</p><h2>Export / import governance state</h2><p class="muted" style="font-size:12px;line-height:1.6">This static deployment intentionally stores data in your browser. Exporting JSON lets you preserve or move demo state without a backend.</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="button primary" data-security-action="exportData">Export JSON</button><label class="button secondary" style="cursor:pointer">Import JSON<input id="importFile" type="file" accept="application/json" hidden data-security-action="importData" data-security-event="change"></label><button class="button danger" data-security-action="resetData">Reset demo</button></div></div>
  <div class="card card-pad"><p class="eyebrow">Architecture path</p><h2>Production evolution</h2><div class="code-block">GitHub Pages / Azure Static Web Apps\n        ↓\nMicrosoft Entra authentication\n        ↓\nAzure Functions API\n        ↓\nCosmos DB / Azure SQL\n        ↓\nMicrosoft Graph + audit integrations</div></div></div>
  <div class="card card-pad section-gap"><h2>Current local data footprint</h2><div class="stat-strip section-gap"><div class="mini-stat"><strong>${state.users.length}</strong><span>Identities</span></div><div class="mini-stat"><strong>${state.groups.length}</strong><span>Groups</span></div><div class="mini-stat"><strong>${state.requests.length}</strong><span>Requests</span></div><div class="mini-stat"><strong>${state.audit.length}</strong><span>Audit events</span></div></div></div>`
 }
@@ -178,7 +178,7 @@ function tablePage(title,desc,heads,rows){return `<div class="card card-pad"><di
 function render(){const fn={dashboard,identities,groups,roles,requests,privileged,reviews,risks,policies,audit,reports}[currentView];el("content").innerHTML=fn();updatePending()}
 function decide(id,status){const r=state.requests.find(x=>x.id===id);if(!r)return;r.status=status;state.audit.unshift({time:"Now",actor:"John Tyler",action:`Access request ${status.toLowerCase()}`,target:id,result:status==="Approved"?"Success":"Alert"});save();render();toast(`${id} ${status.toLowerCase()}`,status==="Approved"?"good":"bad")}
 function remediate(id){const r=state.risks.find(x=>x.id===id);r.status="Remediated";state.audit.unshift({time:"Now",actor:"John Tyler",action:"Risk finding remediated",target:r.entity,result:"Success"});save();render();toast("Risk marked remediated")}
-function openRequest(){el("requestUser").innerHTML=state.users.filter(x=>x.status==="Active").map(x=>`<option value="${x.id}">${x.name} — ${x.dept}</option>`).join("");el("requestModal").classList.remove("hidden")}
+function openRequest(){el("requestUser").innerHTML=state.users.filter(x=>x.status==="Active").map(x=>`<option value="${esc(x.id)}">${esc(x.name)} — ${esc(x.dept)}</option>`).join("");el("requestModal").classList.remove("hidden")}
 function closeRequest(){el("requestModal").classList.add("hidden")}
 function exportData(){const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="identity-governance-demo.json";a.click();URL.revokeObjectURL(a.href);toast("Governance data exported")}
 function importData(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const data=JSON.parse(r.result);if(!data.users||!data.requests)throw new Error();state=data;save();render();toast("Governance data imported")}catch{toast("Invalid governance JSON","bad")}};r.readAsText(f)}
@@ -225,6 +225,12 @@ function ensureIdentitySchema(){
 }
 ensureIdentitySchema();
 
+// Only allow opaque, simple identifiers inside legacy inline event handlers.
+// Display labels remain separately HTML-escaped.
+function safeActionId(value){
+  const id=String(value??"");
+  return /^[A-Za-z0-9_-]{1,128}$/.test(id)?id:"";
+}
 function esc(v){
   return String(v??"")
     .replaceAll("&","&amp;").replaceAll("<","&lt;")
@@ -251,9 +257,9 @@ function identities(){
       <td class="wrap-cell">${esc(groupText)}</td>
       <td>${statusBadge(u.status)}</td>
       <td class="actions-cell">
-        <button class="button secondary" onclick="openIdentityEditor('${u.id}')">Edit</button>
-        <button class="button ghost" onclick="toggleIdentity('${u.id}')">${u.status==="Active"?"Disable":"Enable"}</button>
-        <button class="button danger" onclick="deleteIdentity('${u.id}')">Delete</button>
+        <button class="button secondary" data-security-action="openIdentityEditor" data-security-arg="${esc(u.id)}">Edit</button>
+        <button class="button ghost" data-security-action="toggleIdentity" data-security-arg="${esc(u.id)}">${u.status==="Active"?"Disable":"Enable"}</button>
+        <button class="button danger" data-security-action="deleteIdentity" data-security-arg="${esc(u.id)}">Delete</button>
       </td>
     </tr>`;
   }).join("");
@@ -265,7 +271,7 @@ function identities(){
         <h2 style="margin:4px 0">Identity directory</h2>
         <div class="muted" style="font-size:12px">Create, edit, enable/disable, delete, and manage identity attributes, roles, and group memberships.</div>
       </div>
-      <button class="button primary" onclick="openIdentityEditor()">+ Create identity</button>
+      <button class="button primary" data-security-action="openIdentityEditor">+ Create identity</button>
     </div>
     <div class="table-wrap"><table>
       <thead><tr><th>Identity</th><th>Department</th><th>Manager</th><th>Type</th><th>MFA</th><th>Risk</th><th>Roles</th><th>Groups</th><th>Status</th><th>Actions</th></tr></thead>
@@ -437,8 +443,8 @@ function groups(){
       <td>${g.dynamic?badge("Dynamic","blue"):badge("Assigned","neutral")}</td>
       <td class="wrap-cell">${members.length?members.map(u=>esc(u.name)).join(", "):"No demo users assigned"}</td>
       <td class="actions-cell">
-        <button class="button secondary" onclick="openGroupEditor('${g.id}')">Edit</button>
-        <button class="button danger" onclick="deleteGroup('${g.id}')">Delete</button>
+        <button class="button secondary" data-security-action="openGroupEditor" data-security-arg="${esc(g.id)}">Edit</button>
+        <button class="button danger" data-security-action="deleteGroup" data-security-arg="${esc(g.id)}">Delete</button>
       </td>
     </tr>`;
   }).join("");
@@ -449,7 +455,7 @@ function groups(){
         <h2 style="margin:4px 0">Groups & membership</h2>
         <div class="muted" style="font-size:12px">Manage security groups, Microsoft 365 groups, owners, membership type, and local demo-user membership.</div>
       </div>
-      <button class="button primary" onclick="openGroupEditor()">+ Create group</button>
+      <button class="button primary" data-security-action="openGroupEditor">+ Create group</button>
     </div>
     <div class="table-wrap"><table>
       <thead><tr><th>Group</th><th>Type</th><th>Members</th><th>Owner</th><th>Membership</th><th>Demo members</th><th>Actions</th></tr></thead>
@@ -550,8 +556,8 @@ function roles(){
     <td>${badge(r.source,r.source==="Group"?"good":r.source==="PIM"?"purple":"warn")}</td>
     <td>${r.privileged?badge("Privileged","purple"):badge("Standard","neutral")}</td>
     <td class="actions-cell">
-      <button class="button secondary" onclick="openRoleEditor(${i})">Edit</button>
-      <button class="button danger" onclick="deleteRoleAssignment(${i})">Delete</button>
+      <button class="button secondary" data-security-action="openRoleEditor" data-security-arg="${i}">Edit</button>
+      <button class="button danger" data-security-action="deleteRoleAssignment" data-security-arg="${i}">Delete</button>
     </td>
   </tr>`}).join("");
   return `<div class="card card-pad">
@@ -561,7 +567,7 @@ function roles(){
         <h2 style="margin:4px 0">Azure Roles & RBAC</h2>
         <div class="muted" style="font-size:12px">Create, edit, and remove role assignments across identities and groups with role, scope, source, and privilege classification.</div>
       </div>
-      <button class="button primary" onclick="openRoleEditor()">+ Create assignment</button>
+      <button class="button primary" data-security-action="openRoleEditor">+ Create assignment</button>
     </div>
     <div class="table-wrap"><table>
       <thead><tr><th>Principal</th><th>Role</th><th>Scope</th><th>Source</th><th>Classification</th><th>Actions</th></tr></thead>
@@ -1075,8 +1081,8 @@ function privileged(){
     <td>${p.approval?badge("Required","blue"):badge("Not required","neutral")}</td>
     <td>${esc(p.expires)}</td>
     <td class="actions-cell">
-      <button class="button secondary" onclick="openPimEditor('${p.id}')">Edit</button>
-      <button class="button danger" onclick="deletePimRecord('${p.id}')">Delete</button>
+      <button class="button secondary" data-security-action="openPimEditor" data-security-arg="${esc(p.id)}">Edit</button>
+      <button class="button danger" data-security-action="deletePimRecord" data-security-arg="${esc(p.id)}">Delete</button>
     </td>
   </tr>`).join("");
   return `<div class="card card-pad">
@@ -1086,7 +1092,7 @@ function privileged(){
         <h2 style="margin:4px 0">Privileged Access</h2>
         <div class="muted" style="font-size:12px">Manage eligible and active privileged assignments, scope, activation duration, MFA, approval, and expiration.</div>
       </div>
-      <button class="button primary" onclick="openPimEditor()">+ Add privileged access</button>
+      <button class="button primary" data-security-action="openPimEditor">+ Add privileged access</button>
     </div>
     <div class="table-wrap"><table>
       <thead><tr><th>Identity</th><th>Role</th><th>Scope</th><th>State</th><th>Max activation</th><th>MFA</th><th>Approval</th><th>Expiration</th><th>Actions</th></tr></thead>
@@ -1160,9 +1166,9 @@ function risks(){
     <td>${esc(r.entity)}</td>
     <td>${riskStatusBadge(r.status)}</td>
     <td class="actions-cell">
-      <button class="button secondary" onclick="openRiskEditor('${r.id}')">Edit</button>
-      ${r.status==="Open"?`<button class="button ghost" onclick="remediate('${r.id}')">Remediate</button>`:""}
-      <button class="button danger" onclick="deleteRiskFinding('${r.id}')">Delete</button>
+      <button class="button secondary" data-security-action="openRiskEditor" data-security-arg="${esc(r.id)}">Edit</button>
+      ${r.status==="Open"?`<button class="button ghost" data-security-action="remediate" data-security-arg="${safeActionId(r.id)}">Remediate</button>`:""}
+      <button class="button danger" data-security-action="deleteRiskFinding" data-security-arg="${esc(r.id)}">Delete</button>
     </td>
   </tr>`).join("");
   return `<div class="card card-pad">
@@ -1172,7 +1178,7 @@ function risks(){
         <h2 style="margin:4px 0">Identity Risks</h2>
         <div class="muted" style="font-size:12px">Create, edit, remediate, accept, and remove identity-risk findings for your tenant simulation.</div>
       </div>
-      <button class="button primary" onclick="openRiskEditor()">+ Create risk finding</button>
+      <button class="button primary" data-security-action="openRiskEditor">+ Create risk finding</button>
     </div>
     <div class="table-wrap"><table>
       <thead><tr><th>Severity</th><th>Finding</th><th>Entity</th><th>Status</th><th>Actions</th></tr></thead>
@@ -1242,3 +1248,40 @@ window.openPimEditor=openPimEditor;
 window.deletePimRecord=deletePimRecord;
 window.openRiskEditor=openRiskEditor;
 window.deleteRiskFinding=deleteRiskFinding;
+
+/* CSP-compatible action delegation. Only explicitly allowlisted app functions execute. */
+(() => {
+  const allowed = new Set([
+    "setView","decide","openRequest","remediate","exportData","importData","resetData",
+    "openIdentityEditor","toggleIdentity","deleteIdentity","openGroupEditor","deleteGroup",
+    "openRoleEditor","deleteRoleAssignment","openPimEditor","deletePimRecord",
+    "openRiskEditor","deleteRiskFinding","openIdentity360","closeIdentity360"
+  ]);
+  function invoke(event) {
+    const target = event.target.closest("[data-security-action]");
+    if (!target || !document.contains(target)) return;
+    if ((target.dataset.securityEvent || "click") !== event.type) return;
+    const action = target.dataset.securityAction;
+    if (!allowed.has(action)) return;
+    const handler = window[action];
+    if (typeof handler !== "function") return;
+    if (action === "importData") return handler(event);
+    if (action === "decide") {
+      if (!["Approved","Denied"].includes(target.dataset.securityStatus)) return;
+      return handler(target.dataset.securityArg, target.dataset.securityStatus);
+    }
+    if (target.hasAttribute("data-security-arg")) {
+      const arg = target.dataset.securityArg;
+      if (action === "setView" && !["dashboard","identities","groups","roles","requests","privileged","reviews","risks","policies","audit","reports"].includes(arg)) return;
+      if (["openRoleEditor","deleteRoleAssignment"].includes(action)) {
+        const index = Number(arg);
+        if (!Number.isInteger(index) || index < 0) return;
+        return handler(index);
+      }
+      return handler(arg);
+    }
+    return handler();
+  }
+  document.addEventListener("click", invoke);
+  document.addEventListener("change", invoke);
+})();

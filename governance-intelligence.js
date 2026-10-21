@@ -135,8 +135,10 @@
       })).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b)))
     };
   }
-  function loadSnapshot(){try{return JSON.parse(localStorage.getItem(SNAPSHOT_KEY)||'null')}catch{return null}}
-  function saveSnapshot(s){try{localStorage.setItem(SNAPSHOT_KEY,JSON.stringify(s))}catch{}}
+  // Security: historical tenant inventory is in-memory only, never persisted in browser storage.
+  let ephemeralSnapshot=null;
+  function loadSnapshot(){return ephemeralSnapshot}
+  function saveSnapshot(s){ephemeralSnapshot=s}
   function arrayDiff(a,b){const A=new Set(a||[]),B=new Set(b||[]);return {added:[...B].filter(x=>!A.has(x)),removed:[...A].filter(x=>!B.has(x))}}
   function rbacKey(r){return [r.principal,r.role,r.scope,r.source].map(norm).join('|')}
 
@@ -274,7 +276,7 @@
     modal.innerHTML=`<div class="modal intel-modal">
       <div class="modal-header">
         <div><p class="eyebrow">Identity 360</p><h2>${esc(u.name)}</h2><div class="muted">${esc(u.upn||u.id)}</div></div>
-        <button class="icon-button" onclick="closeIdentity360()" aria-label="Close">×</button>
+        <button class="icon-button" data-security-action="closeIdentity360" aria-label="Close">×</button>
       </div>
       <div class="identity360-metrics">
         <div class="mini-stat"><strong>${esc(u.status)}</strong><span>Account</span></div>
@@ -323,11 +325,11 @@
       const mfaCell=u.mfaReadable?(u.mfa?badge('Registered','good'):badge('No strong method','warn')):badge('Unavailable','neutral');
       const paths=accessPathsForUser(u);
       return `<tr>
-        <td class="name-cell"><button class="identity-link" onclick="openIdentity360('${esc(u.id)}')"><strong>${esc(u.name)}</strong><span>${esc(u.upn)}</span></button></td>
+        <td class="name-cell"><button class="identity-link" data-security-action="openIdentity360" data-security-arg="${esc(u.id)}"><strong>${esc(u.name)}</strong><span>${esc(u.upn)}</span></button></td>
         <td>${esc(u.dept)}</td><td>${esc(u.type)}</td><td>${mfaCell}</td>
         <td class="wrap-cell">${esc(roleText)}</td><td class="wrap-cell">${esc(groupText)}</td>
         <td>${esc(u.lastSignIn)}</td><td>${statusBadge(u.status)}</td>
-        <td><button class="button secondary" onclick="openIdentity360('${esc(u.id)}')">View 360</button><div class="muted intel-inline-note">${paths.length} effective path${paths.length===1?'':'s'}</div></td>
+        <td><button class="button secondary" data-security-action="openIdentity360" data-security-arg="${esc(u.id)}">View 360</button><div class="muted intel-inline-note">${paths.length} effective path${paths.length===1?'':'s'}</div></td>
       </tr>`;
     }).join('');
     return tablePage('Live identity directory','Read-only workforce and guest identities synchronized from Microsoft Entra ID. Open Identity 360 for correlated authentication, membership, role, risk, and audit context.',['Identity','Department','Type','MFA / strong auth','Roles','Groups','Recent sign-in','Status','Identity 360'],rows);
@@ -351,7 +353,7 @@
       entries=entries.filter(e=>JSON.stringify(e).toLowerCase().includes(q));
     }
     const rows=entries.map(e=>`<tr>
-      <td class="name-cell"><button class="identity-link" onclick="openIdentity360('${esc(e.u.id)}')"><strong>${esc(e.u.name)}</strong><span>${esc(e.u.upn||'')}</span></button></td>
+      <td class="name-cell"><button class="identity-link" data-security-action="openIdentity360" data-security-arg="${esc(e.u.id)}"><strong>${esc(e.u.name)}</strong><span>${esc(e.u.upn||'')}</span></button></td>
       <td><strong>${e.paths.length}</strong></td>
       <td>${e.direct}</td><td>${e.group}</td><td>${e.directory}</td><td>${e.pim}</td>
       <td>${e.u.mfaReadable===false?badge('Unknown','neutral'):(e.u.mfa?badge('Registered','good'):badge('Missing','bad'))}</td>
@@ -373,7 +375,7 @@
     }
     paths.sort((a,b)=>Number(b.privileged)-Number(a.privileged)||a.user.localeCompare(b.user)||a.role.localeCompare(b.role));
     const rows=paths.map(p=>`<tr>
-      <td><button class="identity-link compact" onclick="openIdentity360('${esc(p.userId)}')"><strong>${esc(p.user)}</strong></button></td>
+      <td><button class="identity-link compact" data-security-action="openIdentity360" data-security-arg="${esc(p.userId)}"><strong>${esc(p.user)}</strong></button></td>
       <td>${pathChain(p.nodes)}</td>
       <td>${badge(p.source,p.source==='Group'?'good':p.source==='Direct'?'warn':'purple')}</td>
       <td>${p.privileged?badge('Privileged','purple'):badge('Standard','neutral')}</td>
