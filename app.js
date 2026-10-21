@@ -722,7 +722,8 @@ async function returnToDemoMode(){
 function liveModeBanner(){
   if(!liveTenantMode)return "";
   const meta=liveTenantMeta||{};
-  const armIssue=meta.azureRbacError||meta.azureResourcePimError;
+  const rbacIssue=meta.azureRbacError;
+  const pimIssue=meta.azureResourcePimError;
   return `<div>
     <div class="live-mode-banner">
       <div><strong>Live Tenant Connected</strong><span>Read-only Microsoft Graph / Azure data · synced ${esc(state.liveSyncedAt?new Date(state.liveSyncedAt).toLocaleString():"now")}</span></div>
@@ -736,7 +737,8 @@ function liveModeBanner(){
         ${badge(meta.conditionalAccessAvailable?`CA synced (${meta.conditionalAccessEnabledCount||0} enabled)`:"CA unavailable",meta.conditionalAccessAvailable?"good":"neutral")}
       </div>
     </div>
-    ${armIssue?`<div class="callout arm-error-callout"><strong>Azure authorization telemetry unavailable.</strong><div>${esc(armIssue)}</div><div style="margin-top:6px">Microsoft Graph identity data may still be current, but effective Azure authorization cannot be treated as zero while ARM/PIM retrieval is failing.</div></div>`:""}
+    ${rbacIssue?`<div class="callout arm-error-callout"><strong>Azure RBAC retrieval unavailable.</strong><div>${esc(rbacIssue)}</div><div style="margin-top:6px">Azure RBAC coverage is incomplete. Missing results must not be interpreted as zero access.</div></div>`:""}
+    ${pimIssue?`<div class="callout arm-error-callout"><strong>Azure resource PIM retrieval unavailable.</strong><div>${esc(pimIssue)}</div><div style="margin-top:6px">Already retrieved Azure RBAC assignments remain available; active and eligible Azure resource PIM coverage is incomplete.</div></div>`:""}
   </div>`;
 }
 const originalRender=render;
