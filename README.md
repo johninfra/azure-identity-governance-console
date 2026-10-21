@@ -1,80 +1,43 @@
 # Azure Identity Governance Console
 
-A browser-based enterprise IAM governance simulation designed to demonstrate practical Microsoft Entra ID, Azure RBAC, privileged access, access-review, Conditional Access, and identity-risk concepts.
+A browser-based Microsoft Entra ID and Azure governance lab that combines a **simulated IAM operations console** with an optional **read-only Live Tenant connection**. It demonstrates identity lifecycle concepts, group and role governance, Azure RBAC, privileged access, access reviews, Conditional Access, audit activity, and permission-aware Microsoft cloud API integration.
 
-## What this project demonstrates
+> **Scope:** Portfolio/lab project, not a production IAM management platform. The demo's editable records are simulated. The live connection is read-only and currently configured for one lab tenant.
 
-This project models workflows that appear in real identity governance and cloud-security environments:
+## Capabilities
 
-- Full workforce and guest identity lifecycle management (create, edit, enable/disable, delete)
-- MFA registration posture
-- Editable security and Microsoft 365 groups with owner, membership type, and user membership management
-- Editable Azure RBAC assignments with principal, role, scope, source, and privileged classification
-- Access request and approval workflows
-- Privileged Identity Management-style eligibility and activation controls
-- Access reviews and recertification
-- Identity-risk findings and remediation
-- Conditional Access policy inventory
-- Governance audit logging
-- Local export/import of application state
+| Area | Demo mode | Live Tenant mode |
+| --- | --- | --- |
+| Identities and groups | Sample records and simulated lifecycle edits | Read-only Entra directory and membership inventory |
+| Microsoft Entra roles / PIM | Simulated governance workflows | Read-only directory-role and available PIM information |
+| Azure RBAC | Simulated assignments | Read-only Azure Resource Manager assignment inventory when subscription access is permitted |
+| Authentication posture | Sample metrics | Read-only registration/method data when Graph permissions permit |
+| Conditional Access, audit and sign-ins | Sample governance views | Available live data subject to Graph permissions, licensing and API support |
+| Access requests and reviews | Local workflow simulation | No writeback to the tenant |
+| Governance intelligence | Model-based analysis | Client-side scoring, identity correlation and access-path analysis of retrieved data |
 
-The repository supports two distinct deployment contexts from the same codebase:
+Unavailable, unauthorized, or unlicensed data is not evidence that a tenant has no findings. Inspect per-feature error or coverage indicators before interpreting results.
 
-- **Public GitHub version:** a portfolio/demo deployment that uses sample governance data and browser-local state.
-- **Azure enterprise version:** deployed to Azure Static Web Apps through GitHub Actions and protected by Microsoft Entra ID authentication against the configured Azure tenant.
+## Deployment
 
-The current application data layer is still browser-local and uses `localStorage`. This means Azure-hosted data persists separately from the public GitHub deployment because the two deployments use different origins, but the current version does **not** yet provide organization-wide shared persistence across different users or browsers. No tenant secrets, passwords, production identities, or Microsoft Graph data are stored in the repository.
+- **GitHub Pages:** public portfolio/demo application with sample records.
+- **Azure Static Web Apps:** hosted application with an optional **Connect Live Tenant** workflow using Microsoft Entra ID and delegated Microsoft Graph / Azure Resource Manager API access.
+- **GitHub Actions:** deploys `main` to Azure Static Web Apps and runs static security checks. A successful deployment does not itself prove browser authentication or end-user authorization.
 
-## Deployment architecture
+### Authentication and authorization — important distinction
 
-The project intentionally separates **source/deployment**, **authentication**, and **application data**.
+The app uses **two distinct authentication mechanisms**:
 
-```text
-GitHub repository
-      │
-      ├── GitHub Pages
-      │     └── Public portfolio/demo version
-      │           └── Sample data + browser-local storage
-      │
-      └── GitHub Actions
-            └── Azure Static Web Apps deployment
-                  └── Microsoft Entra ID / OIDC authentication
-                        └── Tenant-authenticated Azure version
-                              └── Browser-local state for the current v1
-```
+1. **Application MSAL sign-in:** the browser obtains delegated Entra tokens for the configured lab tenant. Microsoft Graph and Azure Resource Manager evaluate requested scopes, tenant policies, and the **signed-in user's effective permissions** for each API call. A signed-in viewer must not be assumed to have the same data visibility as an administrator.
+2. **Azure Static Web Apps hosted session:** `staticwebapp.config.json` configures an OIDC provider named `entra`, a route policy requiring the SWA `authenticated` role, and a login redirect. SWA's hosting session is **not interchangeable** with MSAL authentication. Earlier browser tests returned `{"clientPrincipal":null}` from `/.auth/me` even when the demo dashboard loaded, so effective hosting-route protection remains **unverified** and must not be presented as proven.
 
-### GitHub Actions → Azure deployment
+The formerly proposed custom SWA role `governance_reader` was **not deployed**; the merged security change restored the original `authenticated` route requirement. Azure subscription RBAC, Entra directory roles, Enterprise Application assignment, and SWA site roles are separate permission systems.
 
-The repository contains an Azure Static Web Apps GitHub Actions workflow. On pushes to `main`, GitHub Actions deploys the application to the Azure Static Web App using the repository's Azure Static Web Apps deployment secret.
+**Multi-organization support is not established.** The current `live-entra.js` connector uses a fixed tenant ID; users from arbitrary organizations cannot be assumed to authenticate and connect their own tenants. A multi-tenant app requires explicit registration, consent, tenant-isolation design, and adversarial testing.
 
-The deployment workflow is the CI/CD path between GitHub and Azure. It should not be confused with end-user authentication: the workflow deploys the application, while Microsoft Entra ID authenticates users when they visit the Azure-hosted version.
+### Required identity permissions
 
-### Live Tenant mode
-
-The Azure-hosted console now supports an optional **Live Tenant** mode. The public GitHub Pages version remains a sample-data demo, while the tenant-authenticated Azure Static Web App can request read-only Microsoft Graph and Azure Resource Manager data.
-
-Live Tenant mode can synchronize:
-
-- Microsoft Entra users and UPNs
-- account enabled/disabled state
-- department where populated
-- security and Microsoft 365 groups
-- direct user membership counts
-- group owners
-- per-user registered authentication methods when permitted
-- active Entra directory role assignments
-- PIM active/eligible role schedule data when licensing exposes it
-- recent directory audit activity
-- recent sign-in information when Entra P1/P2 exposes Graph sign-in telemetry
-- Azure RBAC assignments when a Subscription ID is configured
-
-Live mode is intentionally **read-only**. Create/edit/delete controls remain part of the browser-local demo model and are not used to modify the real tenant.
-
-### Live Tenant app registration requirements
-
-Use a Microsoft Entra app registration configured as a **Single-page application (SPA)** and add the Azure Static Web App origin as a redirect URI.
-
-Delegated Microsoft Graph permissions:
+The Live Tenant connection uses a Microsoft Entra **single-page application (SPA)** registration with the applicable hosted redirect URI. The delegated Microsoft Graph scopes configured in the source are:
 
 - `User.Read`
 - `Directory.Read.All`
@@ -82,170 +45,59 @@ Delegated Microsoft Graph permissions:
 - `AuditLog.Read.All`
 - `UserAuthenticationMethod.Read.All`
 
-For Azure RBAC inventory, also add Azure Service Management delegated:
+Azure RBAC inventory additionally uses `https://management.azure.com/user_impersonation`. Some scopes require administrator consent and appropriate licensed capabilities. These scopes grant **delegated API access**, not elevated directory roles. Requests still depend on the signed-in user's privileges. No client secret belongs in SPA browser source code.
 
-- `https://management.azure.com/user_impersonation`
+## Live Tenant data sources
 
-Grant tenant admin consent where required. The application does not store a client secret in browser code. The Tenant ID is the lab tenant and the Application/Client ID plus optional Subscription ID are stored locally as non-secret identifiers.
+Subject to permission, tenant licensing and API availability, the read-only connector can retrieve users and account status; department/UPN data; groups, memberships and owners; authentication methods; active directory roles and available PIM schedules; audit records; sign-in activity; and subscription-scoped Azure RBAC assignments.
 
-## Microsoft Entra ID authentication
+The app uses HTTPS Microsoft Graph and Azure Resource Manager APIs. The security-hardening change restricts bearer-token requests to trusted API origins, rejects redirects and unexpected Graph pagination hosts, and uses MSAL session storage. Live data access must be tested using both privileged and limited-permission accounts.
 
-The Azure Static Web App is configured with a tenant-specific OpenID Connect provider in `staticwebapp.config.json`. Unauthenticated requests are redirected to the Entra sign-in flow, and the application routes require the `authenticated` role.
+**No live create, update, or delete operations are implemented.** Buttons and forms that modify sample identities, groups, roles, access requests, or risks affect the demonstration model, not Entra ID or Azure.
 
-This creates a company/tenant-facing version of the console that is separate from the public GitHub deployment. Tenant users and guests who are permitted to authenticate can access the Azure-hosted application.
+## Governance analysis
 
-**Azure resource-group RBAC and application sign-in are separate controls.** Having access to the Azure resource group does not automatically grant application access, and application access does not automatically grant Azure management permissions.
+- **Governance Score:** application-defined heuristic; **not** Microsoft Secure Score.
+- **Tenant Drift Detection:** compares in-memory snapshots during the current page lifecycle; previous live snapshots are no longer persisted to `localStorage`.
+- **Identity 360:** correlates available identity, group, authentication, role and audit information.
+- **Privilege Exposure Analyzer:** brings together observed directory roles, PIM and Azure RBAC paths.
+- **Access Path Explorer:** visualizes direct and group-derived permissions without treating a visualization as an authorization decision.
 
-### Data persistence in the current version
+## Data storage and privacy
 
-The v1 console persists state with browser `localStorage`.
+The **demo model** uses browser-local `localStorage`, isolated by web origin; it is not a central, shared organizational database. Some non-secret connection identifiers may also be stored locally. Live drift snapshots remain in memory. Sensitive live directory information is processed in the browser and should not be treated as safe for unapproved corporate use simply because the app is read-only.
 
-Because browser storage is scoped to the site's origin:
+Do not commit tenant secrets, access tokens, passwords, production identity exports, or sensitive screenshots. A production system would need an approved backend/API, centralized audit and retention, carefully designed authorization, data minimization, and stronger runtime assurance.
 
-- data entered in the **Azure Static Web App** stays associated with the Azure-hosted application;
-- data entered in the **public GitHub deployment** stays associated with the public deployment;
-- the two deployments therefore maintain separate browser-local datasets.
+## Security hardening and CI
 
-However, this is **not yet shared organization-wide storage**. A second authorized user on another browser or device will not automatically see the first user's saved governance data.
+Pull request [#3](https://github.com/johninfra/azure-identity-governance-console/pull/3) merged the October 2026 hardening work into `main`, including:
 
-To support a true shared company dataset for all authorized members, the next architecture step is:
+- Escaping and validation for multiple HTML rendering paths and security-action inputs.
+- Delegated browser event handling instead of inline handlers in audited modules.
+- HTTPS origin and redirect restrictions for live Graph/ARM bearer-token requests.
+- Removal of persistent tenant drift snapshots.
+- Security response headers and a **report-only** Content Security Policy.
+- Automated JavaScript syntax and static security-invariant regression checks.
 
-```text
-GitHub / CI-CD
-      ↓
-Azure Static Web Apps
-      ↓
-Microsoft Entra ID authentication
-      ↓
-Azure Functions / API
-      ↓
-Cosmos DB / Azure SQL
-      ↓
-Microsoft Graph (optional)
-```
+The [Static security checks](.github/workflows/security-checks.yml) workflow and Azure Static Web Apps CI/CD workflow passed on merge commit `88a751de2c76c15b8850f4c5b0f650090cb56762`. Static checks are **not** a penetration test, and a report-only CSP is **not** enforced.
 
-That design would allow authenticated organization members to work against the same centrally stored governance dataset while keeping the public GitHub demo isolated.
+### Runtime verification still required
 
+Before treating hosting authentication or per-user data segregation as validated, test a new private-browser session against the actual Azure deployment: login and logout, `/.auth/me`, unauthorized requests, and role-appropriate Graph/ARM read visibility with admin and restricted test identities. Inspect browser console/network failures, verify stale demo data is clearly separated from live data, and test XSS and tenant isolation. Do not claim employer readiness or multi-tenant capability solely from successful CI.
 
-## Governance Intelligence layer
+Additional limitations and review items are recorded in [Enterprise Security Readiness](docs/ENTERPRISE-SECURITY-READINESS.md).
 
-The console also includes a read-only analysis layer that correlates the live Entra and Azure data already synchronized by the application:
+## Development
 
-- **Dynamic Governance Score** — calculates a 0–100 posture score from observable MFA coverage, privileged-access patterns, lifecycle hygiene, group ownership, and open governance findings. The score is an application heuristic, not Microsoft Secure Score.
-- **Tenant Drift Detection** — stores a local snapshot of the previous live sync and reports identity additions/removals, account-state changes, MFA changes, group-membership drift, role grants/revocations, and Azure RBAC changes on the next sync.
-- **Identity 360** — opens a correlated identity view with account status, authentication posture, direct groups, effective authorization paths, governance findings, and related audit activity.
-- **Privilege Exposure Analyzer** — correlates direct Azure RBAC, group-derived Azure RBAC, Entra directory roles, and PIM to identify identities with the broadest observed privileged access.
-- **Access Path Explorer** — renders effective authorization relationships such as `User → Group → Reader → Resource Group`, while keeping direct, group-derived, directory-role, and PIM sources distinct.
+This is a static HTML/CSS/JavaScript project. Clone it, run a local static web server or open `index.html` for the demo, and use the GitHub Actions workflow for Azure deployment. Only connect your own authorized test tenant.
 
-All five features are client-side/read-only and do not require additional Azure configuration beyond the data sources already used by Live Tenant mode.
-\n## Core modules
+## Deployment evidence
 
-| Module | Enterprise concept |
-| --- | --- |
-| Dashboard | Governance posture and operational metrics |
-| Identities | CRUD lifecycle management, MFA/risk attributes, roles, and group memberships |
-| Groups | CRUD group lifecycle, owners, assigned/dynamic membership, and user memberships |
-| Roles & RBAC | CRUD Azure RBAC assignments with principal, role, scope, source, and privilege classification |
-| Access Requests | Entitlement approval workflow |
-| Privileged Access | Just-in-time privilege / PIM concepts |
-| Access Reviews | Periodic access recertification |
-| Identity Risks | Identity hygiene and risk register |
-| Conditional Access | Zero-trust access policy inventory |
-| Audit Logs | Traceability of governance activity |
-| Reports & Data | Demo-state portability and architecture notes |
+A prior screenshot captures the console connected to the Tyler Technology Solutions Entra lab and displaying live identity and Azure authorization information. It documents a point-in-time test, not ongoing completeness or enterprise certification.
 
-## Local development
-
-No build tool is required.
-
-1. Clone the repository.
-2. Open `index.html` locally, or serve the folder with a simple static web server.
-3. Interact with the seeded demo data.
-4. Changes made in the interface are persisted to the browser.
-
-## GitHub Pages
-
-This project is compatible with GitHub Pages because it is composed of static HTML, CSS, and JavaScript.
-
-Enable Pages for the repository and publish from the main branch/root directory.
-
-## Azure deployment
-
-The Azure version is already deployed through the repository's GitHub Actions workflow to Azure Static Web Apps.
-
-The Azure-hosted application is protected with tenant-specific Microsoft Entra ID authentication through OpenID Connect. The public GitHub deployment remains the portfolio/demo version, while the Azure deployment represents the tenant-authenticated enterprise context.
-
-The current v1 still uses browser-local persistence. Shared multi-user organizational persistence would require the backend/API architecture described above.
-
-## Azure Deployment Evidence
-
-This screenshot shows the Azure-hosted version of the **Azure Identity Governance Console** connected to my live Microsoft Entra tenant, **Tyler Technology Solutions**.
-
-The application authenticates through Microsoft Entra ID and uses **Microsoft Graph** and **Azure Resource Manager** to retrieve real tenant and Azure authorization data in read-only mode. The live Identity Directory shown here displays actual Entra users, UPNs, group memberships, registered authentication-method status, directory roles, account status, and Azure RBAC context.
-
-At the time of this screenshot, the application successfully synchronized:
-
-- 11 Microsoft Entra users
-- 16 Entra groups
-- Registered authentication-method data
-- Direct group memberships
-- Active Microsoft Entra directory roles
-- Azure RBAC assignments from the connected Azure subscription
-- Live tenant data through Microsoft Graph
-- Azure resource authorization data through Azure Resource Manager
-
-Recent user sign-in telemetry is intentionally marked as requiring **Microsoft Entra ID P1/P2**, rather than displaying simulated sign-in information.
-
-![Azure Identity Governance Console](docs/screenshots/azure-identity-governance-console.png)
-
-### What this demonstrates
-
-- Integration of a custom web application with a live Microsoft Entra tenant
-- Microsoft Entra ID authentication using MSAL
-- Read-only Microsoft Graph API integration
-- Retrieval of real Entra users and user principal names
-- Live security-group and group-membership synchronization
-- Authentication-method visibility for tenant identities
-- Microsoft Entra directory-role discovery
-- Azure RBAC integration through Azure Resource Manager
-- Clear separation between live tenant data and simulated/demo functionality
-- Least-privilege, read-only cloud administration design
-- Practical IAM troubleshooting across authentication, authorization, groups, roles, and Azure scope
-- Deployment and operation of the application through Azure Static Web Apps
-
-This project demonstrates the relationship between **identity, authentication, authorization, group-based access, privileged roles, Microsoft Graph, and Azure RBAC** in a functioning Microsoft cloud environment rather than relying only on static sample data.
-
-## Security notes
-
-This is a simulation and portfolio project.
-
-- Do not place tenant secrets, client secrets, passwords, access tokens, or real privileged identity information in this repository.
-- Browser storage is not appropriate for sensitive production IAM data.
-- Real enterprise implementations require server-side authorization, secure API design, centralized logging, data protection, and proper identity-provider integration.
-- Client-side role labels in this demo are visual representations only and are not security boundaries.
-
-## Portfolio value
-
-The application is intended to demonstrate understanding of:
-
-- identity lifecycle and governance
-- least privilege
-- role-based access control
-- privileged access management
-- MFA and Conditional Access
-- access reviews and entitlement governance
-- auditability and security operations
-- Azure application deployment and GitHub-based source control
+![Azure Identity Governance Console connected to the lab tenant](docs/screenshots/azure-identity-governance-console.png)
 
 ## Author
 
-Built by John Tyler as part of an Azure, IAM, systems administration, and cybersecurity portfolio.
-
-<!-- Redeployment trigger: live governance dashboard update (2026-10-21). -->
-
-<!-- Redeployment retry after corrected GitHub Actions allowlist (2026-10-21). -->
-
-
-## October 2026 security review: deployment caution
-
-The `enterprise-security-hardening` pull request includes JavaScript hardening and regression checks. The previously proposed `governance_reader` custom role was replaced with the pre-existing `authenticated` hosting route policy. This is a source-level correction, not proof that the Static Web Apps hosting session works in production. Confirm `/.auth/me` identifies authenticated users and verify 401/403 behavior before a production merge. The application currently supports delegated MSAL sign-in for live Microsoft Graph / Azure Resource Manager data in its configured lab tenant; this does not automatically establish an Azure Static Web Apps `/.auth/me` session. The static demo shell must not be represented as private merely because Microsoft Graph requires authentication. Cross-organization use and directory-role-based dashboard visibility require additional independent validation. Review `docs/ENTERPRISE-SECURITY-READINESS.md` before any production deployment.
+Built by John Tyler as an IAM, cloud administration and cybersecurity portfolio project.
