@@ -80,24 +80,40 @@ function titles(v){return {dashboard:"Executive Dashboard",identities:"Identity 
 function setView(v){currentView=v;document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active",b.dataset.view===v));el("pageTitle").textContent=titles(v);el("globalSearch").value="";searchTerm="";render();el("sidebar").classList.remove("open")}
 function filtered(arr){if(!searchTerm)return arr;const q=searchTerm.toLowerCase();return arr.filter(x=>JSON.stringify(x).toLowerCase().includes(q))}
 function dashboard(){
- const active=state.users.filter(x=>x.status==="Active").length,mfa=Math.round(state.users.filter(x=>x.mfa).length/state.users.length*100),pending=state.requests.filter(x=>x.status==="Pending").length,high=state.risks.filter(x=>x.severity==="High"&&x.status==="Open").length;
+ const active=state.users.filter(x=>x.status==="Active").length,mfa=state.users.length?Math.round(state.users.filter(x=>x.mfa).length/state.users.length*100):0,pending=state.requests.filter(x=>x.status==="Pending").length,high=state.risks.filter(x=>x.severity==="High"&&x.status==="Open").length;
  return `<div class="grid metrics">
   <div class="card metric blue"><div class="label">Active identities</div><div class="value">${active}</div><div class="delta">Across ${new Set(state.users.map(x=>x.dept)).size} departments</div></div>
   <div class="card metric good"><div class="label">MFA coverage</div><div class="value">${mfa}%</div><div class="delta">${state.users.filter(x=>!x.mfa).length} identities require attention</div></div>
-  <div class="card metric warn"><div class="label">Pending requests</div><div class="value">${pending}</div><div class="delta">Manager and security approval queue</div></div>
+  <div class="card metric warn"><div class="label">${liveTenantMode?"Access activity events":"Pending requests"}</div><div class="value">${liveTenantMode?(state.accessActivity||[]).length:pending}</div><div class="delta">${liveTenantMode?"Read-only directory audit events · not approval requests":"Manager and security approval queue"}</div></div>
   <div class="card metric bad"><div class="label">High-risk findings</div><div class="value">${high}</div><div class="delta">Open governance findings</div></div>
  </div>
  <div class="grid two-col section-gap">
   <div class="card card-pad"><div class="card-header"><div><p class="eyebrow">Governance posture</p><h2>Identity security score</h2></div><div class="risk-score good">84</div></div>
-   <div class="stat-strip"><div class="mini-stat"><strong>${mfa}%</strong><span>MFA adoption</span></div><div class="mini-stat"><strong>${state.pim.filter(x=>x.state==="Eligible").length}</strong><span>PIM eligible</span></div><div class="mini-stat"><strong>${state.reviews.filter(x=>x.status==="In progress").length}</strong><span>Active reviews</span></div><div class="mini-stat"><strong>${state.policies.filter(x=>x.state==="On").length}</strong><span>CA policies enforced</span></div></div>
+   <div class="stat-strip"><div class="mini-stat"><strong>${mfa}%</strong><span>MFA adoption</span></div><div class="mini-stat"><strong>${state.pim.filter(x=>x.state==="Eligible").length}</strong><span>PIM eligible</span></div>${liveTenantMode?`<div class="mini-stat"><strong>—</strong><span>Review campaigns not queried</span></div>`:`<div class="mini-stat"><strong>${state.reviews.filter(x=>x.status==="In progress").length}</strong><span>Active reviews</span></div>`}<div class="mini-stat"><strong>${state.policies.filter(x=>x.state==="On").length}</strong><span>CA policies enforced</span></div></div>
    <div class="section-gap callout">This dashboard models the same governance concerns enterprise IAM teams monitor: authentication coverage, privileged access, entitlement approvals, lifecycle recertification, and policy enforcement.</div>
   </div>
   <div class="card card-pad"><div class="card-header"><div><p class="eyebrow">Priority queue</p><h2>Open risk findings</h2></div><button class="button ghost" onclick="setView('risks')">View all</button></div>
    <div class="list">${state.risks.filter(x=>x.status==="Open").slice(0,4).map(r=>`<div class="list-item"><div><div style="display:flex;gap:8px;align-items:center"><i class="severity ${r.severity.toLowerCase()}"></i><strong>${r.title}</strong></div><span>${r.entity} · ${r.detail}</span></div>${riskBadge(r.severity)}</div>`).join("")}</div>
   </div>
  </div>
- <div class="grid two-col section-gap"><div class="card card-pad"><div class="card-header"><h2>Recent access requests</h2><button class="button ghost" onclick="setView('requests')">Open queue</button></div>${requestTable(state.requests.slice(0,4),false)}</div>
- <div class="card card-pad"><div class="card-header"><h2>Access review progress</h2></div><div class="list">${state.reviews.map(r=>`<div class="list-item"><div style="flex:1"><strong>${r.name}</strong><span>${r.progress}% complete · Due ${r.due}</span><div style="margin-top:8px">${pct(r.progress)}</div></div>${statusBadge(r.status)}</div>`).join("")}</div></div></div>`
+ ${liveTenantMode?liveDashboardGovernanceSections():`<div class="grid two-col section-gap"><div class="card card-pad"><div class="card-header"><h2>Recent access requests</h2><button class="button ghost" onclick="setView('requests')">Open queue</button></div>${requestTable(state.requests.slice(0,4),false)}</div>
+ <div class="card card-pad"><div class="card-header"><h2>Access review progress</h2></div><div class="list">${state.reviews.map(r=>`<div class="list-item"><div style="flex:1"><strong>${r.name}</strong><span>${r.progress}% complete · Due ${r.due}</span><div style="margin-top:8px">${pct(r.progress)}</div></div>${statusBadge(r.status)}</div>`).join("")}</div></div></div>`}`
+}
+// Live dashboard summaries intentionally never use demo request or review arrays.
+function liveDashboardGovernanceSections(){
+ const events=[...(state.accessActivity||[])].sort((a,b)=>{
+  const left=Date.parse(a.rawTime||a.dateTime||a.time||"");
+  const right=Date.parse(b.rawTime||b.dateTime||b.time||"");
+  return (Number.isFinite(right)?right:0)-(Number.isFinite(left)?left:0);
+ }).slice(0,4);
+ const rows=events.map(a=>`<tr><td>${esc(a.time||"—")}</td><td>${esc(a.actor||"—")}</td><td>${esc(a.activity||"—")}</td><td>${esc(a.target||"—")}</td><td>${statusBadge(a.result||"Unknown")}</td></tr>`).join("");
+ return `<div class="grid two-col section-gap">
+ <div class="card card-pad"><div class="card-header"><h2>Recent access activity</h2><button class="button ghost" onclick="setView('requests')">View events</button></div>
+ <p class="muted">Read-only Microsoft Entra directory audit events, not submitted approval requests.</p>
+ <div class="table-wrap"><table><thead><tr><th>Time</th><th>Actor</th><th>Activity</th><th>Target</th><th>Result</th></tr></thead><tbody>${rows||'<tr><td colspan="5" class="empty">No access-related audit events were returned for this tenant in the current window.</td></tr>'}</tbody></table></div></div>
+ <div class="card card-pad"><div class="card-header"><h2>Access review candidates</h2><button class="button ghost" onclick="setView('reviews')">View candidates</button></div>
+ <div class="callout">The Access Reviews page generates read-only recertification candidates from authenticated tenant data. Actual Entra Access Review campaigns, completion percentages, and due dates are not queried; no review progress is claimed here.</div>
+ </div></div>`;
 }
 function identities(){
  const rows=filtered(state.users).map(u=>`<tr><td class="name-cell"><strong>${u.name}</strong><span>${u.upn}</span></td><td>${u.dept}</td><td>${u.type}</td><td>${u.mfa?badge("Registered","good"):badge("Missing","bad")}</td><td>${riskBadge(u.risk)}</td><td>${u.lastSignIn}</td><td>${statusBadge(u.status)}</td></tr>`).join("");
