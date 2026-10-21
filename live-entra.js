@@ -56,12 +56,26 @@
     return endpoint.href;
   }
 
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
   async function api(url, token) {
     const safeUrl = requireTrustedEndpoint(url);
-    const res = await fetch(safeUrl, {
-      redirect: "error",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }
-    });
+    let res;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      res = await fetch(safeUrl, {
+        redirect: "error",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }
+      });
+      if (![429, 503].includes(res.status) || attempt === 2) break;
+      const retryAfter = res.headers.get("Retry-After");
+      const parsedSeconds = Number(retryAfter);
+      const retryMs = retryAfter && Number.isFinite(parsedSeconds)
+        ? parsedSeconds * 1000
+        : retryAfter && Number.isFinite(Date.parse(retryAfter))
+          ? Date.parse(retryAfter) - Date.now()
+          : 1000 * 2 ** attempt;
+      await sleep(Math.max(0, Math.min(30000, retryMs)));
+    }
     if (!res.ok) {
       let detail = `${res.status} ${res.statusText}`;
       try {
@@ -445,16 +459,17 @@
         }
 
         try {
-          const principalIds = [...new Set([...usersRaw, ...groupsRaw].map(x => x.id).filter(Boolean))];
-          const listForPrincipal = (collection, principalId) =>
+          // Query once per schedule collection at subscription scope instead of
+          // issuing two requests for every user and group (which caused ARM 429s).
+          const listAtScope = collection =>
             paged(
-              `${ARM}/subscriptions/${subscriptionId}/providers/Microsoft.Authorization/${collection}?$filter=${encodeURIComponent(`principalId eq ${principalId}`)}&api-version=2020-10-01`,
+              `${ARM}/subscriptions/${subscriptionId}/providers/Microsoft.Authorization/${collection}?$filter=${encodeURIComponent("atScope()")}&api-version=2020-10-01`,
               armToken
             );
 
           const [activeSets, eligibleSets] = await Promise.all([
-            mapLimit(principalIds, 4, id => listForPrincipal("roleAssignmentScheduleInstances", id)),
-            mapLimit(principalIds, 4, id => listForPrincipal("roleEligibilityScheduleInstances", id))
+            listAtScope("roleAssignmentScheduleInstances"),
+            listAtScope("roleEligibilityScheduleInstances")
           ]);
 
           const dedupe = (items) => {
@@ -473,8 +488,8 @@
             });
           };
 
-          azureRoleAssignmentScheduleInstances = dedupe(activeSets.flat());
-          azureRoleEligibilityScheduleInstances = dedupe(eligibleSets.flat());
+          azureRoleAssignmentScheduleInstances = dedupe(activeSets);
+          azureRoleEligibilityScheduleInstances = dedupe(eligibleSets);
           azureResourcePimAvailable = true;
         } catch (e) {
           azureResourcePimError = `Azure resource PIM query failed: ${normalizeError(e)}`;
