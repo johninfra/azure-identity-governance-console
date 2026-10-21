@@ -33,4 +33,9 @@ assert.match(app,/data-security-action/);
 assert.match(app,/const allowed = new Set/);
 assert.doesNotMatch(config.globalHeaders['Content-Security-Policy-Report-Only'],/script-src[^;]*'unsafe-inline'/);
 assert.equal(config.responseOverrides['403'].statusCode,403);
+// Release invariants: the live connector must retain one audited fetch gateway.
+assert.equal((live.match(/\\bfetch\\s*\\(/g)||[]).length,1);
+assert.doesNotMatch(live,/\\bXMLHttpRequest\\b|\\bsendBeacon\\s*\\(/);
+assert.match(live,/redirect: "error"/);
+assert.equal(config.routes.some(r => r.route === '/*' && r.allowedRoles.includes('authenticated')),false);
 console.log('Static security checks passed; custom-role assignment and live authorization still require validation.');
