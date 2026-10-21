@@ -1,6 +1,6 @@
 # Security Model
 
-This repository is a portfolio simulation. It intentionally does **not** claim that browser-local persistence provides enterprise security.
+This repository is a **personal single-tenant IAM lab** with two modes: a **public GitHub Pages demo** containing fictional, browser-local simulation data, and a **separate Azure Static Web Apps deployment** intended to display read-only live data from the author's fixed Entra lab tenant. The GitHub Pages host disables live-tenant authentication. Neither mode is an enterprise production service.
 
 ## Trust boundaries
 
@@ -11,9 +11,12 @@ Therefore:
 - Local state is demonstration data only.
 - Client-side approval actions are workflow simulations.
 - Client-side role names do not enforce real authorization.
-- No secrets or real tenant data belong in this implementation.
+- No secrets, tokens, or real tenant exports belong in the public repository or GitHub Pages demo.
+- The separately hosted live mode processes authorized real directory information in the browser; it must not be mistaken for a centralized secure backend.
+- The MSAL connector restricts live sign-in to the configured tenant; delegated Graph/ARM API access is determined by actual token scopes and user permissions.
+- SWA hosting OIDC and MSAL delegated API login are distinct. Although SWA has an `authenticated` route configuration, effective runtime hosting enforcement remains unverified by the existing `/.auth/me` evidence.
 
-## Production controls
+## If adapting beyond this personal lab
 
 A production implementation should include:
 
