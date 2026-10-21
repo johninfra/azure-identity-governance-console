@@ -53,3 +53,23 @@ Do not connect an employer's tenant to this project until the organization's aut
 - Without this trusted role-assignment configuration, legitimate users including the lab owner will receive HTTP 403: this intentional fail-closed behavior prevents accidental deployment with authenticated-user access.
 - Test anonymous access, authenticated user without role, valid governance reader, cross-tenant login, logout/session revocation, and protected deep routes in a staging deployment before merging.
 - Client-side roles or JavaScript-only checks do not replace hosting/API enforcement. Review SWA route matching and custom auth behavior against current Microsoft documentation before release.
+
+## Phase 7 — Release validation (provisional NO-GO)
+Static build and source regression checks are not a runtime penetration test. The following items remain **unverified** and prevent any claim of enterprise production readiness:
+
+| Gate | Current evidence | Release decision |
+| --- | --- | --- |
+| Static JavaScript and security regressions | GitHub Actions tests; recheck current head SHA | Pass only when CI green |
+| SWA deploy build | Previous successful branch workflow | Build success only, not authorization validation |
+| App role assignment | No trusted custom SWA role-assignment configuration verified | Blocker |
+| Unauthorized user rejection | Not tested in deployed staging | Blocker |
+| Live Graph/ARM read-only network activity | Source reviewed; no authenticated network HAR reviewed | Blocker |
+| XSS runtime regression across all views | No browser security suite executed | Blocker |
+| Content Security Policy enforcement | Report-only, permits inline styles | Blocker |
+| Sign-out and cached data clearing | Not validated in an authenticated browser | Blocker |
+| User/tenant isolation | Single tenant fixed; company tenant not tested | Blocker |
+| Organizational security approval | No employer review | Blocker |
+
+**Deployment warning:** The branch requires the SWA custom role `governance_reader` but currently includes no trusted assignment implementation. Merging could deny access to all users. Do not merge to `main` until the role assignment and staging acceptance tests are complete.
+
+**Phase 7 decision: NO-GO for production merge at this time.** Keep the PR as a draft. Further work may resolve code-level gaps, but the remaining environment-specific evidence requires authorized Entra/Azure testing.
