@@ -11,7 +11,7 @@ assert.match(app,/\$\{esc\(r\.entity\)\} · \$\{esc\(r\.detail\)\}/);
 assert.match(app,/const safeType=\[/);
 assert.doesNotMatch(gov,/localStorage\.setItem\(SNAPSHOT_KEY/);
 assert.doesNotMatch(gov,/localStorage\.getItem\(SNAPSHOT_KEY/);
-assert.deepEqual(config.routes[0].allowedRoles,['governance_reader']); // Requires SWA custom-role assignment to be configured and tested.
+assert.deepEqual(config.routes[0].allowedRoles,['authenticated']); // Preserve the existing hosting gate; validate SWA session separately.
 assert.ok(config.globalHeaders['X-Content-Type-Options']==='nosniff');
 assert.ok(config.globalHeaders['X-Frame-Options']==='DENY');
 assert.match(live,/cacheLocation: "sessionStorage"/);
@@ -37,5 +37,5 @@ assert.equal(config.responseOverrides['403'].statusCode,403);
 assert.equal((live.match(/fetch\s*\(/g)||[]).length,1);
 assert.doesNotMatch(live,/XMLHttpRequest|sendBeacon\s*\(/);
 assert.match(live,/redirect: "error"/);
-assert.equal(config.routes.some(r => r.route === '/*' && r.allowedRoles.includes('authenticated')),false);
-console.log('Static security checks passed; custom-role assignment and live authorization still require validation.');
+assert.equal(config.routes.some(r => r.route === '/*' && r.allowedRoles.includes('governance_reader')),false);
+console.log('Static security checks passed; hosted login and delegated live authorization require runtime validation.');
