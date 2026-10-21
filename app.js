@@ -128,7 +128,7 @@ function roles(){
  return tablePage("Azure RBAC assignments","Review principal, role, scope, assignment source, and privilege level.",["Principal","Role","Scope","Source","Classification"],rows)
 }
 function requestTable(items,actions=true){
- return `<div class="table-wrap"><table><thead><tr><th>Request</th><th>Identity</th><th>Access</th><th>Scope</th><th>Duration</th><th>Status</th>${actions?"<th>Decision</th>":""}</tr></thead><tbody>${items.map(r=>`<tr><td class="name-cell"><strong>${esc(r.id)}</strong><span>${esc(r.submitted)}</span></td><td>${esc(user(r.userId).name)}</td><td>${esc(r.role)}</td><td>${esc(r.scope)}</td><td>${esc(r.duration)}</td><td>${statusBadge(r.status)}</td>${actions?`<td>${r.status==="Pending"?`<button class="button primary" onclick="decide('${esc(r.id)}','Approved')">Approve</button> <button class="button danger" onclick="decide('${esc(r.id)}','Denied')">Deny</button>`:"—"}</td>`:""}</tr>`).join("")}</tbody></table></div>`
+ return `<div class="table-wrap"><table><thead><tr><th>Request</th><th>Identity</th><th>Access</th><th>Scope</th><th>Duration</th><th>Status</th>${actions?"<th>Decision</th>":""}</tr></thead><tbody>${items.map(r=>`<tr><td class="name-cell"><strong>${esc(r.id)}</strong><span>${esc(r.submitted)}</span></td><td>${esc(user(r.userId).name)}</td><td>${esc(r.role)}</td><td>${esc(r.scope)}</td><td>${esc(r.duration)}</td><td>${statusBadge(r.status)}</td>${actions?`<td>${r.status==="Pending"?`<button class="button primary" onclick="decide('${safeActionId(r.id)}','Approved')">Approve</button> <button class="button danger" onclick="decide('${safeActionId(r.id)}','Denied')">Deny</button>`:"—"}</td>`:""}</tr>`).join("")}</tbody></table></div>`
 }
 function requests(){
  return `<div class="card card-pad"><div class="toolbar"><div><p class="eyebrow">Entitlement workflow</p><h2 style="margin:4px 0">Access request queue</h2><div class="muted" style="font-size:12px">Simulated manager/security approval workflow with audit logging.</div></div><button class="button primary" onclick="openRequest()">+ New request</button></div>${requestTable(filtered(state.requests))}</div>`
@@ -142,7 +142,7 @@ function reviews(){
  return `<div class="grid three-col">${cards}</div>`
 }
 function risks(){
- const rows=filtered(state.risks).map(r=>`<tr><td>${riskBadge(r.severity)}</td><td class="name-cell"><strong>${esc(r.title)}</strong><span>${esc(r.detail)}</span></td><td>${r.entity}</td><td>${statusBadge(r.status)}</td><td>${r.status==="Open"?`<button class="button secondary" onclick="remediate('${esc(r.id)}')">Mark remediated</button>`:"—"}</td></tr>`).join("");
+ const rows=filtered(state.risks).map(r=>`<tr><td>${riskBadge(r.severity)}</td><td class="name-cell"><strong>${esc(r.title)}</strong><span>${esc(r.detail)}</span></td><td>${esc(r.entity)}</td><td>${statusBadge(r.status)}</td><td>${r.status==="Open"?`<button class="button secondary" onclick="remediate('${safeActionId(r.id)}')">Mark remediated</button>`:"—"}</td></tr>`).join("");
  return tablePage("Identity risk register","Prioritized IAM findings that model common governance and hygiene issues.",["Severity","Finding","Entity","Status","Action"],rows)
 }
 function policies(){
@@ -225,6 +225,12 @@ function ensureIdentitySchema(){
 }
 ensureIdentitySchema();
 
+// Only allow opaque, simple identifiers inside legacy inline event handlers.
+// Display labels remain separately HTML-escaped.
+function safeActionId(value){
+  const id=String(value??"");
+  return /^[A-Za-z0-9_-]{1,128}$/.test(id)?id:"";
+}
 function esc(v){
   return String(v??"")
     .replaceAll("&","&amp;").replaceAll("<","&lt;")
@@ -1161,7 +1167,7 @@ function risks(){
     <td>${riskStatusBadge(r.status)}</td>
     <td class="actions-cell">
       <button class="button secondary" onclick="openRiskEditor('${r.id}')">Edit</button>
-      ${r.status==="Open"?`<button class="button ghost" onclick="remediate('${esc(r.id)}')">Remediate</button>`:""}
+      ${r.status==="Open"?`<button class="button ghost" onclick="remediate('${safeActionId(r.id)}')">Remediate</button>`:""}
       <button class="button danger" onclick="deleteRiskFinding('${r.id}')">Delete</button>
     </td>
   </tr>`).join("");
