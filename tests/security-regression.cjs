@@ -11,7 +11,7 @@ assert.match(app,/\$\{esc\(r\.entity\)\} · \$\{esc\(r\.detail\)\}/);
 assert.match(app,/const safeType=\[/);
 assert.doesNotMatch(gov,/localStorage\.setItem\(SNAPSHOT_KEY/);
 assert.doesNotMatch(gov,/localStorage\.getItem\(SNAPSHOT_KEY/);
-assert.deepEqual(config.routes[0].allowedRoles,['authenticated']); // Not app-role authorization; remains a blocker.
+assert.deepEqual(config.routes[0].allowedRoles,['governance_reader']); // Requires SWA custom-role assignment to be configured and tested.
 assert.ok(config.globalHeaders['X-Content-Type-Options']==='nosniff');
 assert.ok(config.globalHeaders['X-Frame-Options']==='DENY');
 assert.match(live,/cacheLocation: "sessionStorage"/);
@@ -32,4 +32,5 @@ assert.doesNotMatch(gov,/on(?:click|change|submit|input)=/);
 assert.match(app,/data-security-action/);
 assert.match(app,/const allowed = new Set/);
 assert.doesNotMatch(config.globalHeaders['Content-Security-Policy-Report-Only'],/script-src[^;]*'unsafe-inline'/);
-console.log('Static security regression checks passed; authorization remains a deployment blocker.');
+assert.equal(config.responseOverrides['403'].statusCode,403);
+console.log('Static security checks passed; custom-role assignment and live authorization still require validation.');
