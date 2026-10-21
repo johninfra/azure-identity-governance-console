@@ -37,5 +37,11 @@
       "statusCode": 302,
       "redirect": "/.auth/login/entra"
     }
+  },
+  "globalHeaders": {
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+    "X-Frame-Options": "DENY",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()"
   }
 }
