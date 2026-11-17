@@ -61,9 +61,9 @@
           <button class="button secondary" id="liveTenantButton">Connect Live Tenant</button>
           <button class="button ghost hidden" id="demoModeButton">Return to Demo</button>
           <button class="button secondary" id="newRequestButton">+ New access request</button>
-          <div class="operator">
-            <div class="avatar">JT</div>
-            <div><strong>John Tyler</strong><span>Identity Administrator</span></div>
+          <div class="operator" aria-label="Authenticated account">
+            <div class="avatar" id="operatorAvatar">—</div>
+            <div><strong id="operatorName">Checking session…</strong><span id="operatorEmail">Account not yet verified</span></div>
           </div>
         </div>
       </header>
@@ -447,8 +447,8 @@
     <div class="noscript">JavaScript is required to use this governance console.</div>
   </noscript>
   <script src="https://alcdn.msauth.net/browser/2.35.0/js/msal-browser.min.js"></script>
-  <script src="live-entra.js?v=20260922-ca-live"></script>
-  <script src="app.js?v=20260922-ca-live"></script>
-  <script src="governance-intelligence.js?v=20260922-arm-pim"></script>
+  <script src="live-entra.js?v=20261117-signin-profile"></script>
+  <script src="app.js?v=20261117-signin-profile"></script>
+  <script src="governance-intelligence.js?v=20261117-signin-profile"></script>
 </body>
 </html>
