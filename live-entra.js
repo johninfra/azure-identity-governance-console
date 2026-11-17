@@ -150,6 +150,13 @@
     return Number.isNaN(d.getTime()) ? String(v) : d.toLocaleString();
   }
 
+  // Prefer actual successful sign-ins; older accounts may have only attempt telemetry.
+  function latestTimestamp(...values) {
+    return values
+      .filter(value => value && Number.isFinite(Date.parse(value)))
+      .sort((a, b) => Date.parse(b) - Date.parse(a))[0] || null;
+  }
+
   let msalInstance = null;
   let account = null;
 
@@ -340,6 +347,24 @@
 
     const graphToken = await acquire(GRAPH_SCOPES, config);
 
+    // /me is scoped to the same tenant-validated delegated identity as Graph.
+    // Use mail when populated, otherwise the user's UPN (not a hardcoded admin).
+    let signedInUser = null;
+    try {
+      const me = await api(`${GRAPH}/me?$select=id,displayName,mail,userPrincipalName`, graphToken);
+      signedInUser = {
+        name: me.displayName || account?.name || account?.username || "Signed-in user",
+        email: me.mail || me.userPrincipalName || account?.username || "",
+        tenantId: account?.tenantId || ""
+      };
+    } catch {
+      if (account) signedInUser = {
+        name: account.name || account.username || "Signed-in user",
+        email: account.username || "",
+        tenantId: account.tenantId || ""
+      };
+    }
+
     const [usersRaw, groupsRaw, servicePrincipals, directoryRoleDefinitions, directoryRoleAssignments] =
       await Promise.all([
         paged(`${GRAPH}/users?$select=id,displayName,userPrincipalName,userType,accountEnabled,department&$top=999`, graphToken),
@@ -387,15 +412,38 @@
     });
     const authMethods = Object.fromEntries(authPairs);
 
+    // Per-user signInActivity is not limited to the most recent 100 tenant events.
+    // Query it separately so lack of licensing/consent does not block directory sync.
+    // Graph limits $top to 500 when selecting signInActivity.
+    let signInActivityByUser = new Map();
+    let signInActivityAvailable = false;
+    let signInActivityError = "";
+    try {
+      const activityUsers = await paged(
+        `${GRAPH}/users?$select=id,signInActivity&$top=500`, graphToken
+      );
+      signInActivityByUser = new Map(activityUsers.map(u => [
+        String(u.id).toLowerCase(), u.signInActivity || null
+      ]));
+      signInActivityAvailable = true;
+    } catch (e) {
+      signInActivityError = normalizeError(e);
+    }
+
     let audits = [];
     try {
       audits = await paged(`${GRAPH}/auditLogs/directoryAudits?$top=100&$orderby=activityDateTime%20desc`, graphToken, 100);
     } catch {}
 
     let signIns = [];
+    let signInLogsAvailable = false;
+    let signInLogsError = "";
     try {
       signIns = await paged(`${GRAPH}/auditLogs/signIns?$top=100&$orderby=createdDateTime%20desc`, graphToken, 100);
-    } catch {}
+      signInLogsAvailable = true;
+    } catch (e) {
+      signInLogsError = normalizeError(e);
+    }
 
     let pimAssignments = [];
     let pimEligibilities = [];
@@ -498,9 +546,15 @@
     }
 
     const latestSignInByUser = new Map();
+    const latestSuccessfulSignInByUser = new Map();
     for (const x of signIns) {
       const key = String(x.userId || "").toLowerCase();
-      if (key && !latestSignInByUser.has(key)) latestSignInByUser.set(key, x);
+      if (!key) continue;
+      if (!latestSignInByUser.has(key)) latestSignInByUser.set(key, x);
+      if (x.status?.errorCode != null && Number(x.status.errorCode) === 0 &&
+          !latestSuccessfulSignInByUser.has(key)) {
+        latestSuccessfulSignInByUser.set(key, x);
+      }
     }
 
     const userGroups = new Map(usersRaw.map(u => [u.id, []]));
@@ -533,7 +587,23 @@
       const hasStrong = Array.isArray(methods)
         ? methods.some(m => strongMethodTypes.has(m["@odata.type"]))
         : false;
-      const last = latestSignInByUser.get(String(u.id).toLowerCase());
+      const userKey = String(u.id).toLowerCase();
+      const activity = signInActivityByUser.get(userKey);
+      const recent = latestSignInByUser.get(userKey);
+      const lastSuccessful = latestTimestamp(
+        activity?.lastSuccessfulSignInDateTime,
+        latestSuccessfulSignInByUser.get(userKey)?.createdDateTime
+      );
+      const lastAttempt = latestTimestamp(
+        activity?.lastSignInDateTime,
+        activity?.lastNonInteractiveSignInDateTime,
+        recent?.createdDateTime
+      );
+      const observedSignIn = lastSuccessful || lastAttempt;
+      const signInKind = lastSuccessful ? "Last successful sign-in" :
+        lastAttempt ? "Last attempt (success unverified)" :
+        signInActivityAvailable || signInLogsAvailable ? "No sign-in recorded" :
+        "Sign-in data unavailable";
       const roles = [...new Set([
         ...(directoryRolesByPrincipal.get(u.id) || []),
         ...(azureRolesByPrincipal.get(u.id) || [])
@@ -549,7 +619,10 @@
         risk: "Unknown",
         status: u.accountEnabled === false ? "Disabled" : "Active",
         manager: "",
-        lastSignIn: last ? formatDate(last.createdDateTime) : (signIns.length ? "No recent event" : "P1/P2 required"),
+        lastSignIn: observedSignIn ? formatDate(observedSignIn) :
+          (signInActivityAvailable || signInLogsAvailable ? "No sign-in recorded" : "Unavailable"),
+        lastSignInKind: signInKind,
+        lastSignInRaw: observedSignIn || null,
         roles,
         groups: userGroups.get(u.id) || []
       };
@@ -893,7 +966,7 @@
     }).filter(Boolean);
 
     return {
-      account: account ? { name: account.name || account.username, username: account.username } : null,
+      account: signedInUser,
       syncedAt: new Date().toISOString(),
       users,
       groups,
@@ -904,7 +977,12 @@
       accessActivity,
       policies: conditionalAccessPolicies,
       meta: {
-        signInsAvailable: signIns.length > 0,
+        signInsAvailable: signInActivityAvailable || signInLogsAvailable,
+        signInActivityAvailable,
+        signInActivityError,
+        signInLogsAvailable,
+        signInLogsError,
+        lastSignInCoverageCount: users.filter(u => !!u.lastSignInRaw).length,
         authMethodsReadable: Object.values(authMethods).some(Array.isArray),
         azureRbacAvailable,
         azureRbacError,
