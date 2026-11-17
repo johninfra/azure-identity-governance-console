@@ -62,6 +62,8 @@ const seed={
 let state=loadState();let currentView="dashboard";let searchTerm="";
 let liveTenantMode=false;
 let liveTenantMeta=null;
+let liveAccount=null;
+let hostedAccount=null;
 let demoStateBackup=null;
 const el=id=>document.getElementById(id);
 function loadState(){try{const v=localStorage.getItem(STORAGE_KEY);return v?JSON.parse(v):structuredClone(seed)}catch{return structuredClone(seed)}}
@@ -637,6 +639,36 @@ window.deleteRoleAssignment=deleteRoleAssignment;
 function liveConfig(){
   return window.LiveEntra?.loadConfig?.()||{};
 }
+function setOperatorAccount(profile, source){
+  const name=String(profile?.name||"Authenticated user").trim();
+  const email=String(profile?.email||profile?.username||"").trim();
+  const avatar=el("operatorAvatar"), nameNode=el("operatorName"), emailNode=el("operatorEmail");
+  if(nameNode)nameNode.textContent=name;
+  if(emailNode)emailNode.textContent=email||source||"Email unavailable";
+  if(avatar)avatar.textContent=name.split(/\s+/).slice(0,2).map(s=>s[0]||"").join("").toUpperCase()||"U";
+}
+async function loadHostedAccount(){
+  if(window.LiveEntra?.isPublicDemoHost?.()){
+    setOperatorAccount(null,"Public demo · no signed-in account");return;
+  }
+  // The hosting session and Graph/MSAL session can be different identities.
+  try{
+    const response=await fetch("/.auth/me",{credentials:"same-origin",cache:"no-store",redirect:"error"});
+    if(!response.ok)throw new Error("No hosting session");
+    const body=await response.json();
+    const principal=body?.clientPrincipal;
+    if(!principal){setOperatorAccount(null,"No verified hosting session");return;}
+    const claims=Array.isArray(principal.claims)?principal.claims:[];
+    const claim=(...types)=>claims.find(c=>types.includes(c.typ))?.val||"";
+    hostedAccount={
+      name: claim("name","http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name")||principal.userDetails||"Signed-in user",
+      email:claim("email","preferred_username","http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress","upn")||principal.userDetails||""
+    };
+    if(!liveAccount)setOperatorAccount(hostedAccount,"Hosted Entra session");
+  }catch{
+    if(!liveAccount)setOperatorAccount(null,"Hosting session unavailable");
+  }
+}
 function updateTenantChrome(){
   const tenantStrong=document.querySelector(".tenant-card strong");
   const tenantSmall=document.querySelector(".tenant-card small");
@@ -650,6 +682,8 @@ function updateTenantChrome(){
   el("liveTenantButton")?.classList.toggle("hidden",liveTenantMode);
   el("demoModeButton")?.classList.toggle("hidden",!liveTenantMode);
   if(el("newRequestButton"))el("newRequestButton").disabled=liveTenantMode;
+  if(liveAccount)setOperatorAccount(liveAccount,"Microsoft Graph");
+  else if(hostedAccount)setOperatorAccount(hostedAccount,"Hosted Entra session");
 }
 function openLiveTenantModal(){
   if(!window.LiveEntra){toast("Live tenant connector failed to load","bad");return}
@@ -695,6 +729,7 @@ async function syncLiveTenantFromForm(e){
     };
     liveTenantMode=true;
     liveTenantMeta=live.meta||{};
+    liveAccount=live.account||null;
     closeLiveTenantModal();
     currentView="dashboard";
     searchTerm="";
@@ -713,6 +748,7 @@ async function returnToDemoMode(){
   else state=loadState();
   liveTenantMode=false;
   liveTenantMeta=null;
+  liveAccount=null;
   currentView="dashboard";
   searchTerm="";
   updateTenantChrome();
@@ -731,12 +767,13 @@ function liveModeBanner(){
         ${badge(`${state.users.length} users`,"good")}
         ${badge(`${state.groups.length} groups`,"blue")}
         ${badge(meta.authMethodsReadable?"Auth methods readable":"Auth methods limited",meta.authMethodsReadable?"good":"warn")}
-        ${badge(meta.signInsAvailable?"Sign-ins available":"Sign-ins need P1/P2",meta.signInsAvailable?"good":"warn")}
+        ${badge(meta.signInActivityAvailable?`Last sign-in ${meta.lastSignInCoverageCount||0}/${state.users.length}`:meta.signInsAvailable?"Sign-in logs partial":"Sign-in activity unavailable",meta.signInActivityAvailable?"good":"warn")}
         ${badge(meta.azureRbacAvailable?"Azure RBAC synced":"Azure RBAC unavailable",meta.azureRbacAvailable?"blue":"bad")}
         ${badge(meta.azureResourcePimAvailable?`Azure PIM synced (${meta.azureResourcePimEligibleCount||0} eligible / ${meta.azureResourcePimActiveCount||0} active)`:"Azure PIM unavailable",meta.azureResourcePimAvailable?"purple":"neutral")}
         ${badge(meta.conditionalAccessAvailable?`CA synced (${meta.conditionalAccessEnabledCount||0} enabled)`:"CA unavailable",meta.conditionalAccessAvailable?"good":"neutral")}
       </div>
     </div>
+    ${!meta.signInActivityAvailable?`<div class="callout arm-error-callout"><strong>Last sign-in coverage limited.</strong><div>${esc(meta.signInActivityError||"Per-user sign-in activity could not be retrieved.")}</div><div style="margin-top:6px">Check delegated AuditLog.Read.All consent and the signed-in user's Entra role and licensing. The recent event sample is not a complete user history.</div></div>`:""}
     ${rbacIssue?`<div class="callout arm-error-callout"><strong>Azure RBAC retrieval unavailable.</strong><div>${esc(rbacIssue)}</div><div style="margin-top:6px">Azure RBAC coverage is incomplete. Missing results must not be interpreted as zero access.</div></div>`:""}
     ${pimIssue?`<div class="callout arm-error-callout"><strong>Azure resource PIM retrieval unavailable.</strong><div>${esc(pimIssue)}</div><div style="margin-top:6px">Already retrieved Azure RBAC assignments remain available; active and eligible Azure resource PIM coverage is incomplete.</div></div>`:""}
   </div>`;
@@ -762,7 +799,7 @@ identities=function(){
       <td class="name-cell"><strong>${esc(u.name)}</strong><span>${esc(u.upn)}</span></td>
       <td>${esc(u.dept)}</td><td>${esc(u.type)}</td><td>${mfaCell}</td>
       <td class="wrap-cell">${esc(roleText)}</td><td class="wrap-cell">${esc(groupText)}</td>
-      <td>${esc(u.lastSignIn)}</td><td>${statusBadge(u.status)}</td>
+      <td title="${esc(u.lastSignInKind||"Last sign-in")}">${esc(u.lastSignIn)}</td><td>${statusBadge(u.status)}</td>
     </tr>`;
   }).join("");
   return tablePage("Live identity directory","Read-only workforce and guest identities synchronized from Microsoft Entra ID.",["Identity","Department","Type","MFA / strong auth","Roles","Groups","Recent sign-in","Status"],rows);
@@ -1237,6 +1274,8 @@ function deleteRiskFinding(id){
   state.audit.unshift({time:"Now",actor:"John Tyler",action:"Identity risk deleted",target:`${r.entity} · ${r.title}`,result:"Success"});
   save();render();toast("Risk finding deleted","bad");
 }
+
+loadHostedAccount();
 
 el("pimForm").addEventListener("submit",savePimFromForm);
 document.querySelectorAll("[data-close-pim]").forEach(b=>b.addEventListener("click",closePimEditor));
