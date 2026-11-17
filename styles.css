@@ -89,3 +89,11 @@ button:disabled{opacity:.55;cursor:not-allowed}
   .intel-modal-grid{grid-template-columns:1fr}
   .drift-item,.path-row{align-items:flex-start;flex-direction:column}
 }
+
+/* Show the actual authenticated account instead of a fixed demonstration admin. */
+.operator{min-width:0}.operator>div:last-child{min-width:0;max-width:245px}
+.operator strong,.operator span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.operator span{font-size:11px}
+@media(max-width:1100px){.operator>div:last-child{display:block}.operator>div:last-child{max-width:170px}}
+@media(max-width:820px){.operator{display:flex}.operator>div:last-child{max-width:135px}}
+@media(max-width:520px){.operator>div:last-child{max-width:110px}}
