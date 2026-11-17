@@ -288,7 +288,7 @@
 
       <div class="intel-modal-grid section-gap">
         <div class="intel-panel"><p class="eyebrow">Profile</p>
-          <dl class="intel-dl"><dt>Department</dt><dd>${esc(u.dept||'Unassigned')}</dd><dt>Type</dt><dd>${esc(u.type||'Member')}</dd><dt>Recent sign-in</dt><dd>${esc(u.lastSignIn||'Unavailable')}</dd><dt>Risk</dt><dd>${esc(u.risk||'Unknown')}</dd></dl>
+          <dl class="intel-dl"><dt>Department</dt><dd>${esc(u.dept||'Unassigned')}</dd><dt>Type</dt><dd>${esc(u.type||'Member')}</dd><dt>Recent sign-in</dt><dd>${esc(u.lastSignIn||'Unavailable')}<div class="muted intel-inline-note">${esc(u.lastSignInKind||'Sign-in data')}</div></dd><dt>Risk</dt><dd>${esc(u.risk||'Unknown')}</dd></dl>
         </div>
         <div class="intel-panel"><p class="eyebrow">Group memberships</p>
           <div class="chip-list">${groupNames.length?groupNames.map(g=>badge(g,'blue')).join(''):'<span class="muted">No direct group memberships returned.</span>'}</div>
@@ -328,7 +328,7 @@
         <td class="name-cell"><button class="identity-link" data-security-action="openIdentity360" data-security-arg="${esc(u.id)}"><strong>${esc(u.name)}</strong><span>${esc(u.upn)}</span></button></td>
         <td>${esc(u.dept)}</td><td>${esc(u.type)}</td><td>${mfaCell}</td>
         <td class="wrap-cell">${esc(roleText)}</td><td class="wrap-cell">${esc(groupText)}</td>
-        <td>${esc(u.lastSignIn)}</td><td>${statusBadge(u.status)}</td>
+        <td title="${esc(u.lastSignInKind||'Last sign-in')}">${esc(u.lastSignIn)}</td><td>${statusBadge(u.status)}</td>
         <td><button class="button secondary" data-security-action="openIdentity360" data-security-arg="${esc(u.id)}">View 360</button><div class="muted intel-inline-note">${paths.length} effective path${paths.length===1?'':'s'}</div></td>
       </tr>`;
     }).join('');
